@@ -6,7 +6,19 @@
     <title>数字パターン予測アプリ (1-6)</title>
     <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="style.css">
+    <style>
+        /* カスタムスタイルやアニメーション微調整 */
+        body {
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+        }
+        .num-btn:active {
+            transform: scale(0.95);
+        }
+        /* ランキングバーのアニメーション */
+        .prediction-bar {
+            transition: width 0.4s ease-in-out;
+        }
+    </style>
 </head>
 <body class="bg-slate-900 text-slate-100 min-h-screen flex flex-col items-center py-8 px-4">
 
@@ -72,7 +84,262 @@
         </section>
     </div>
 
-    <!-- JavaScriptの読み込み -->
-    <script src="script.js"></script>
+    <!-- JavaScriptのロジック -->
+    <script>
+        // アプリの状態データ
+        let state = {
+            history: [], // 全履歴: [{num: 3, sessionId: 1}, ...]
+            sessions: [{ id: 1, name: "区切り #1" }]
+        };
+
+        // ローカルストレージからの読み込み
+        function loadData() {
+            const saved = localStorage.getItem('number_predictor_state');
+            if (saved) {
+                try {
+                    state = JSON.parse(saved);
+                } catch (e) {
+                    console.error("データの読み込みに失敗しました", e);
+                }
+            }
+        }
+
+        // ローカルストレージへの保存
+        function saveData() {
+            localStorage.setItem('number_predictor_state', JSON.stringify(state));
+        }
+
+        // 現在のセッションID取得
+        function getCurrentSessionId() {
+            if (state.sessions.length === 0) {
+                state.sessions.push({ id: 1, name: "区切り #1" });
+            }
+            return state.sessions[state.sessions.length - 1].id;
+        }
+
+        // 数値追加処理
+        function addNumber(num) {
+            const sessionId = getCurrentSessionId();
+            state.history.push({ num: parseInt(num), sessionId: sessionId });
+            saveData();
+            updateUI();
+        }
+
+        // 直前の入力を取り消す
+        function undo() {
+            if (state.history.length > 0) {
+                state.history.pop();
+                saveData();
+                updateUI();
+            }
+        }
+
+        // 新しい区切りを開始
+        function startNewSession() {
+            const newId = state.sessions.length + 1;
+            state.sessions.push({ id: newId, name: `区切り #${newId}` });
+            saveData();
+            updateUI();
+        }
+
+        // 全リセット
+        function resetAll() {
+            if (confirm("すべての履歴と区切りデータをリセットしますか？")) {
+                state = {
+                    history: [],
+                    sessions: [{ id: 1, name: "区切り #1" }]
+                };
+                saveData();
+                updateUI();
+            }
+        }
+
+        // 予測・分析ロジック
+        function calculatePredictions() {
+            const history = state.history;
+            const currentSessionId = getCurrentSessionId();
+            const total = history.length;
+
+            // 基本スコアの初期化 (1〜6)
+            let scores = { 1: 50, 2: 50, 3: 50, 4: 50, 5: 50, 6: 50 };
+
+            if (total === 0) {
+                return [
+                    { num: 1, score: 50, rate: "16.7%" },
+                    { num: 2, score: 50, rate: "16.7%" },
+                    { num: 3, score: 50, rate: "16.7%" },
+                    { num: 4, score: 50, rate: "16.7%" },
+                    { num: 5, score: 50, rate: "16.7%" },
+                    { num: 6, score: 50, rate: "16.7%" }
+                ];
+            }
+
+            // 1. 全体出現頻度ベースの調整（揺り戻し考慮）
+            const counts = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0 };
+            history.forEach(item => counts[item.num]++);
+            
+            const avgCount = total / 6;
+            for (let i = 1; i <= 6; i++) {
+                const diff = avgCount - counts[i];
+                scores[i] += diff * 3;
+            }
+
+            // 2. 直近の出現間隔（何回出ていないか）の考慮
+            for (let i = 1; i <= 6; i++) {
+                let lastIndex = -1;
+                for (let idx = history.length - 1; idx >= 0; idx--) {
+                    if (history[idx].num === i) {
+                        lastIndex = idx;
+                        break;
+                    }
+                }
+                const gap = lastIndex === -1 ? total : (total - 1 - lastIndex);
+                if (gap >= 10) {
+                    scores[i] += 15; // 長く出ていないものは確率アップ
+                }
+            }
+
+            // 3. マルコフ連鎖（直前の数値からの遷移傾向）
+            if (total >= 2) {
+                const lastNum = history[history.length - 1].num;
+                let transitionCounts = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0 };
+                let transitionTotal = 0;
+
+                for (let i = 0; i < history.length - 1; i++) {
+                    if (history[i].num === lastNum) {
+                        const nextNum = history[i + 1].num;
+                        transitionCounts[nextNum]++;
+                        transitionTotal++;
+                    }
+                }
+
+                if (transitionTotal > 0) {
+                    for (let i = 1; i <= 6; i++) {
+                        const transProb = transitionCounts[i] / transitionTotal;
+                        scores[i] += transProb * 40;
+                    }
+                }
+            }
+
+            // 4. 現在の区切り（セッション）内での傾向
+            const currentSessionHistory = history.filter(item => item.sessionId === currentSessionId);
+            if (currentSessionHistory.length > 0) {
+                const sessionCounts = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0 };
+                currentSessionHistory.forEach(item => sessionCounts[item.num]++);
+                
+                const sessionTotal = currentSessionHistory.length;
+                for (let i = 1; i <= 6; i++) {
+                    if (sessionTotal <= 5) {
+                        if (sessionCounts[i] === 0) scores[i] += 10;
+                    } else {
+                        const sessionAvg = sessionTotal / 6;
+                        scores[i] += (sessionAvg - sessionCounts[i]) * 2;
+                    }
+                }
+            }
+
+            // スコアを確率パーセンテージ風に正規化
+            let totalScore = 0;
+            for (let i = 1; i <= 6; i++) {
+                if (scores[i] < 5) scores[i] = 5;
+                totalScore += scores[i];
+            }
+
+            let results = [];
+            for (let i = 1; i <= 6; i++) {
+                let probability = (scores[i] / totalScore) * 100;
+                results.push({
+                    num: i,
+                    score: scores[i],
+                    rate: probability.toFixed(1) + "%"
+                });
+            }
+
+            results.sort((a, b) => b.score - a.score);
+            return results;
+        }
+
+        // 画面の更新
+        function updateUI() {
+            document.getElementById('total-count').textContent = state.history.length;
+
+            const currentSession = state.sessions[state.sessions.length - 1];
+            document.getElementById('current-session-label').textContent = currentSession ? currentSession.name : "区切り #1";
+
+            document.getElementById('btn-undo').disabled = state.history.length === 0;
+
+            // 履歴の描画 (直近15件)
+            const historyContainer = document.getElementById('history-container');
+            if (state.history.length === 0) {
+                historyContainer.innerHTML = '<span class="text-xs text-slate-500 italic">まだ入力がありません</span>';
+            } else {
+                historyContainer.innerHTML = '';
+                const recent = state.history.slice(-15).reverse();
+                recent.forEach((item) => {
+                    const badge = document.createElement('span');
+                    badge.className = "w-7 h-7 flex items-center justify-center bg-slate-800 text-indigo-300 font-bold text-xs rounded-lg border border-slate-700 shadow-sm";
+                    badge.textContent = item.num;
+                    historyContainer.appendChild(badge);
+                });
+            }
+
+            // 予測ランキングの描画
+            const predictions = calculatePredictions();
+            const predictionList = document.getElementById('prediction-list');
+            predictionList.innerHTML = '';
+
+            predictions.forEach((pred, index) => {
+                const rank = index + 1;
+                let rankColor = "text-slate-400 bg-slate-800 border-slate-700";
+                if (rank === 1) rankColor = "text-amber-300 bg-amber-950/40 border-amber-600/50 font-bold";
+                if (rank === 2) rankColor = "text-slate-200 bg-slate-800 border-slate-600 font-bold";
+                if (rank === 3) rankColor = "text-amber-600 bg-amber-950/20 border-amber-900/50 font-bold";
+
+                const itemDiv = document.createElement('div');
+                itemDiv.className = `flex items-center justify-between p-3 rounded-xl border ${rankColor} transition`;
+                
+                itemDiv.innerHTML = `
+                    <div class="flex items-center gap-3">
+                        <span class="w-6 text-center text-sm font-semibold">${rank}位</span>
+                        <span class="w-9 h-9 flex items-center justify-center bg-indigo-600 text-white font-extrabold rounded-lg shadow">${pred.num}</span>
+                    </div>
+                    <div class="flex-1 mx-4">
+                        <div class="w-full bg-slate-700/60 rounded-full h-2 overflow-hidden">
+                            <div class="prediction-bar bg-gradient-to-r from-indigo-500 to-teal-400 h-2 rounded-full" style="width: ${pred.rate}"></div>
+                        </div>
+                    </div>
+                    <div class="text-right">
+                        <span class="text-sm font-bold text-slate-200">${pred.rate}</span>
+                    </div>
+                `;
+                predictionList.appendChild(itemDiv);
+            });
+        }
+
+        // イベントリスナーの設定
+        document.addEventListener('DOMContentLoaded', () => {
+            loadData();
+            updateUI();
+
+            document.querySelectorAll('.num-btn').forEach(button => {
+                button.addEventListener('click', () => {
+                    const num = button.getAttribute('data-num');
+                    addNumber(num);
+                });
+            });
+
+            document.addEventListener('keydown', (e) => {
+                if (['1', '2', '3', '4', '5', '6'].includes(e.key)) {
+                    addNumber(e.key);
+                } else if (e.key === 'Backspace' || e.key === 'z') {
+                    undo();
+                }
+            });
+
+            document.getElementById('btn-undo').addEventListener('click', undo);
+            document.getElementById('btn-new-session').addEventListener('click', startNewSession);
+            document.getElementById('btn-reset').addEventListener('click', resetAll);
+        });
+    </script>
 </body>
 </html>
