@@ -1,582 +1,78 @@
 <!DOCTYPE html>
-<html lang="ja" class="dark">
+<html lang="ja">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>1-6 ナンバー予測＆パターン分析アプリ</title>
-    <!-- Tailwind CSS -->
+    <title>数字パターン予測アプリ (1-6)</title>
+    <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-        tailwind.config = {
-            darkMode: 'class',
-            theme: {
-                extend: {
-                    colors: {
-                        brand: {
-                            50: '#eef2ff',
-                            100: '#e0e7ff',
-                            500: '#6366f1',
-                            600: '#4f46e5',
-                            700: '#4338ca',
-                            900: '#312e81',
-                        }
-                    }
-                }
-            }
-        }
-    </script>
-    <!-- Google Fonts -->
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <!-- FontAwesome -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <style>
-        body { font-family: 'Inter', sans-serif; }
-    </style>
+    <link rel="stylesheet" href="style.css">
 </head>
-<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col antialiased selection:bg-indigo-500 selection:text-white">
+<body class="bg-slate-900 text-slate-100 min-h-screen flex flex-col items-center py-8 px-4">
 
-    <!-- ヘッダー -->
-    <header class="border-b border-slate-800 bg-slate-900/60 backdrop-blur sticky top-0 z-50">
-        <div class="max-w-6xl mx-auto px-4 py-4 flex flex-col sm:flex-row items-center justify-between gap-4">
-            <div class="flex items-center space-x-3">
-                <div class="bg-indigo-600 p-2.5 rounded-xl shadow-lg shadow-indigo-500/30">
-                    <i class="fa-solid fa-chart-line text-white text-xl"></i>
-                </div>
-                <div>
-                    <h1 class="text-xl font-bold tracking-tight text-white">NumPredictor 1-6</h1>
-                    <p class="text-xs text-slate-400">20回以内の出現傾向・パターン分析エンジン</p>
-                </div>
+    <div class="max-w-xl w-full bg-slate-800 rounded-2xl shadow-xl p-6 border border-slate-700">
+        <header class="text-center mb-6">
+            <h1 class="text-2xl font-bold tracking-tight text-indigo-400">🔢 1-6 ナンバー予測アナライザー</h1>
+            <p class="text-sm text-slate-400 mt-1">過去のパターンと区切り傾向から、20回以内の出現確率を予測します</p>
+        </header>
+
+        <!-- コントロール・区切りセクション -->
+        <section class="mb-6 bg-slate-900/50 p-4 rounded-xl border border-slate-700/50 flex flex-wrap items-center justify-between gap-3">
+            <div>
+                <span class="text-xs text-slate-400 block">現在の区切り</span>
+                <span id="current-session-label" class="text-lg font-bold text-indigo-300">区切り #1</span>
             </div>
-            <div class="flex items-center gap-2">
-                <button onclick="app.openInfoModal()" class="px-3 py-1.5 text-xs font-medium text-slate-300 bg-slate-800 hover:bg-slate-700 rounded-lg transition border border-slate-700">
-                    <i class="fa-solid fa-circle-question mr-1"></i>使い方・仕様
+            <div class="flex gap-2">
+                <button id="btn-new-session" class="bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold px-4 py-2 rounded-lg transition shadow">
+                    新しい区切りで開始
                 </button>
-                <button onclick="app.exportData()" class="px-3 py-1.5 text-xs font-medium text-slate-300 bg-slate-800 hover:bg-slate-700 rounded-lg transition border border-slate-700">
-                    <i class="fa-solid fa-download mr-1"></i>JSON出力
-                </button>
-            </div>
-        </div>
-    </header>
-
-    <!-- メインコンテンツ -->
-    <main class="flex-grow max-w-6xl w-full mx-auto px-4 py-6 grid grid-cols-1 lg:grid-cols-12 gap-6">
-
-        <!-- 左カラム: 入力と現在のセッション状態 (4 cols) -->
-        <div class="lg:col-span-5 flex flex-col gap-6">
-
-            <!-- セッション情報カード -->
-            <div class="bg-slate-900/80 border border-slate-800 rounded-2xl p-5 shadow-xl relative overflow-hidden">
-                <div class="absolute top-0 right-0 transform translate-x-4 -translate-y-4 w-24 h-24 bg-indigo-500/10 rounded-full blur-xl pointer-events-none"></div>
-                <div class="flex items-center justify-between mb-4">
-                    <span class="text-xs font-semibold uppercase tracking-wider text-indigo-400 bg-indigo-500/10 px-2.5 py-1 rounded-full border border-indigo-500/20">
-                        <i class="fa-solid fa-layer-group mr-1"></i> 現在の区切りセッション
-                    </span>
-                    <span id="session-count-badge" class="text-sm font-bold text-slate-300">区切り #1 (0回目)</span>
-                </div>
-                
-                <div class="bg-slate-950/60 rounded-xl p-4 border border-slate-800/80 flex items-center justify-between mb-4">
-                    <div>
-                        <div class="text-xs text-slate-400">現在の区切りの進行度</div>
-                        <div class="text-lg font-bold text-white mt-0.5"><span id="current-step-num">0</span> / 20 <span class="text-xs font-normal text-slate-400">回以内ターゲット</span></div>
-                    </div>
-                    <div class="w-16 h-16 relative flex items-center justify-center">
-                        <!-- 円形プログレス代替 -->
-                        <div class="text-indigo-400 font-bold text-sm" id="progress-percent">0%</div>
-                    </div>
-                </div>
-
-                <button onclick="app.startNewSession()" class="w-full py-2.5 px-4 bg-slate-800 hover:bg-slate-700 text-indigo-300 font-medium rounded-xl border border-slate-700 transition flex items-center justify-center gap-2 text-sm shadow-sm">
-                    <i class="fa-solid fa-plus-circle"></i>新しい区切り（セッション）を開始する
+                <button id="btn-reset" class="bg-rose-900/40 hover:bg-rose-800 text-rose-300 text-sm font-medium px-3 py-2 rounded-lg transition border border-rose-700/50">
+                    全リセット
                 </button>
             </div>
+        </section>
 
-            <!-- 入力パッドカード -->
-            <div class="bg-slate-900/80 border border-slate-800 rounded-2xl p-5 shadow-xl">
-                <div class="flex items-center justify-between mb-4">
-                    <h2 class="text-sm font-semibold text-slate-200"><i class="fa-solid fa-hand-pointer text-indigo-400 mr-2"></i>数値を入力 (1〜6)</h2>
-                    <span class="text-xs text-slate-500">キーボードの 1〜6 でも入力可能</span>
-                </div>
-
-                <!-- 1〜6の数字選択ボタン -->
-                <div class="grid grid-cols-3 gap-3 mb-4">
-                    <button onclick="app.inputNumber(1)" class="group relative bg-gradient-to-b from-slate-800 to-slate-900 hover:from-indigo-600 hover:to-indigo-700 border border-slate-700 hover:border-indigo-500 rounded-2xl py-4 text-2xl font-bold text-white shadow-lg transition-all duration-200 active:scale-95 flex flex-col items-center justify-center">
-                        <span>1</span>
-                        <span class="text-[10px] text-slate-400 group-hover:text-indigo-200 font-normal mt-0.5">ワン</span>
-                    </button>
-                    <button onclick="app.inputNumber(2)" class="group relative bg-gradient-to-b from-slate-800 to-slate-900 hover:from-indigo-600 hover:to-indigo-700 border border-slate-700 hover:border-indigo-500 rounded-2xl py-4 text-2xl font-bold text-white shadow-lg transition-all duration-200 active:scale-95 flex flex-col items-center justify-center">
-                        <span>2</span>
-                        <span class="text-[10px] text-slate-400 group-hover:text-indigo-200 font-normal mt-0.5">ツー</span>
-                    </button>
-                    <button onclick="app.inputNumber(3)" class="group relative bg-gradient-to-b from-slate-800 to-slate-900 hover:from-indigo-600 hover:to-indigo-700 border border-slate-700 hover:border-indigo-500 rounded-2xl py-4 text-2xl font-bold text-white shadow-lg transition-all duration-200 active:scale-95 flex flex-col items-center justify-center">
-                        <span>3</span>
-                        <span class="text-[10px] text-slate-400 group-hover:text-indigo-200 font-normal mt-0.5">スリー</span>
-                    </button>
-                    <button onclick="app.inputNumber(4)" class="group relative bg-gradient-to-b from-slate-800 to-slate-900 hover:from-indigo-600 hover:to-indigo-700 border border-slate-700 hover:border-indigo-500 rounded-2xl py-4 text-2xl font-bold text-white shadow-lg transition-all duration-200 active:scale-95 flex flex-col items-center justify-center">
-                        <span>4</span>
-                        <span class="text-[10px] text-slate-400 group-hover:text-indigo-200 font-normal mt-0.5">フォー</span>
-                    </button>
-                    <button onclick="app.inputNumber(5)" class="group relative bg-gradient-to-b from-slate-800 to-slate-900 hover:from-indigo-600 hover:to-indigo-700 border border-slate-700 hover:border-indigo-500 rounded-2xl py-4 text-2xl font-bold text-white shadow-lg transition-all duration-200 active:scale-95 flex flex-col items-center justify-center">
-                        <span>5</span>
-                        <span class="text-[10px] text-slate-400 group-hover:text-indigo-200 font-normal mt-0.5">ファイブ</span>
-                    </button>
-                    <button onclick="app.inputNumber(6)" class="group relative bg-gradient-to-b from-slate-800 to-slate-900 hover:from-indigo-600 hover:to-indigo-700 border border-slate-700 hover:border-indigo-500 rounded-2xl py-4 text-2xl font-bold text-white shadow-lg transition-all duration-200 active:scale-95 flex flex-col items-center justify-center">
-                        <span>6</span>
-                        <span class="text-[10px] text-slate-400 group-hover:text-indigo-200 font-normal mt-0.5">シックス</span>
-                    </button>
-                </div>
-
-                <!-- アクションコントロール -->
-                <div class="flex gap-2">
-                    <button onclick="app.undoLast()" class="flex-1 py-2 px-3 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium rounded-xl border border-slate-700 transition flex items-center justify-center gap-1.5">
-                        <i class="fa-solid fa-rotate-left"></i>直前を削除
-                    </button>
-                    <button onclick="app.confirmReset()" class="py-2 px-3 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 text-xs font-medium rounded-xl border border-rose-500/20 transition flex items-center justify-center gap-1.5">
-                        <i class="fa-solid fa-trash-can"></i>全リセット
-                    </button>
-                </div>
+        <!-- 数字入力セクション (1〜6ボタン) -->
+        <section class="mb-8 text-center">
+            <label class="block text-sm font-medium text-slate-300 mb-3">数値を入力 (クリックまたはキーボード 1〜6)</label>
+            <div class="grid grid-cols-6 gap-2">
+                <button data-num="1" class="num-btn bg-slate-700 hover:bg-indigo-600 text-xl font-bold py-4 rounded-xl border border-slate-600 transition shadow">1</button>
+                <button data-num="2" class="num-btn bg-slate-700 hover:bg-indigo-600 text-xl font-bold py-4 rounded-xl border border-slate-600 transition shadow">2</button>
+                <button data-num="3" class="num-btn bg-slate-700 hover:bg-indigo-600 text-xl font-bold py-4 rounded-xl border border-slate-600 transition shadow">3</button>
+                <button data-num="4" class="num-btn bg-slate-700 hover:bg-indigo-600 text-xl font-bold py-4 rounded-xl border border-slate-600 transition shadow">4</button>
+                <button data-num="5" class="num-btn bg-slate-700 hover:bg-indigo-600 text-xl font-bold py-4 rounded-xl border border-slate-600 transition shadow">5</button>
+                <button data-num="6" class="num-btn bg-slate-700 hover:bg-indigo-600 text-xl font-bold py-4 rounded-xl border border-slate-600 transition shadow">6</button>
             </div>
-
-            <!-- 直近の入力ストリーム -->
-            <div class="bg-slate-900/80 border border-slate-800 rounded-2xl p-5 shadow-xl flex-grow flex flex-col">
-                <div class="flex items-center justify-between mb-3">
-                    <h3 class="text-sm font-semibold text-slate-200"><i class="fa-solid fa-clock-rotate-left text-indigo-400 mr-2"></i>直近の入力履歴</h3>
-                    <span class="text-xs text-slate-400" id="total-history-count">全0件</span>
-                </div>
-                <div id="history-pills" class="flex flex-wrap gap-1.5 max-h-36 overflow-y-auto p-2 bg-slate-950/40 rounded-xl border border-slate-800/60">
-                    <span class="text-xs text-slate-500 italic p-1">まだ入力履歴がありません。数値を入力してください。</span>
-                </div>
+            <div class="mt-3 flex justify-between items-center text-xs text-slate-400 px-1">
+                <span>総入力回数: <strong id="total-count" class="text-white">0</strong> 回</span>
+                <button id="btn-undo" class="hover:text-slate-200 underline disabled:opacity-50" disabled>直前の入力を取り消す</button>
             </div>
+        </section>
 
-        </div>
-
-        <!-- 右カラム: 20回以内予測ランキング・分析結果 (7 cols) -->
-        <div class="lg:col-span-7 flex flex-col gap-6">
-
-            <!-- 予測ランキングカード -->
-            <div class="bg-slate-900/80 border border-slate-800 rounded-2xl p-6 shadow-xl flex flex-col">
-                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-6 pb-4 border-b border-slate-800">
-                    <div>
-                        <h2 class="text-base font-bold text-white flex items-center gap-2">
-                            <i class="fa-solid fa-ranking-star text-indigo-400"></i>
-                            20回以内 到達予測ランキング
-                        </h2>
-                        <p class="text-xs text-slate-400 mt-0.5">全体パターン＆区切り内の偏り・遷移確率（マルコフ連鎖）に基づく統合スコア</p>
-                    </div>
-                    <div class="text-xs font-medium text-emerald-400 bg-emerald-500/10 px-3 py-1 rounded-full border border-emerald-500/20 self-start sm:self-auto">
-                        <i class="fa-solid fa-bolt mr-1"></i> リアルタイム更新
-                    </div>
-                </div>
-
-                <!-- ランキングリスト -->
-                <div id="ranking-list" class="space-y-3">
-                    <!-- 動的挿入 -->
-                    <div class="text-center py-10 text-slate-500 text-sm">
-                        データを入力すると、予測ランキングがここに表示されます。
-                    </div>
-                </div>
+        <!-- 予測ランキングセクション -->
+        <section class="mb-8">
+            <div class="flex justify-between items-center mb-3">
+                <h2 class="text-lg font-semibold text-slate-200">🏆 20回以内 出現確率予測ランキング</h2>
+                <span class="text-xs text-indigo-400 bg-indigo-950 px-2 py-1 rounded border border-indigo-800/50">全体＋区切りハイブリッド</span>
             </div>
-
-            <!-- 分析インサイト・アドバイス -->
-            <div class="bg-slate-900/80 border border-slate-800 rounded-2xl p-6 shadow-xl">
-                <h3 class="text-sm font-semibold text-slate-200 mb-3 flex items-center gap-2">
-                    <i class="fa-solid fa-lightbulb text-amber-400"></i> パターン分析サマリー
-                </h3>
-                <div id="analysis-insights" class="space-y-2 text-xs text-slate-300 leading-relaxed bg-slate-950/40 p-4 rounded-xl border border-slate-800/60">
-                    <p class="text-slate-500 italic">データが蓄積されると、直近の出現間隔の偏りや区切りごとの傾向が表示されます。</p>
-                </div>
+            <div id="prediction-list" class="space-y-2.5">
+                <!-- 動的にランキング項目が挿入されます -->
             </div>
+        </section>
 
-        </div>
-
-    </main>
-
-    <!-- フッター -->
-    <footer class="border-t border-slate-800 bg-slate-900/40 py-4 mt-auto">
-        <div class="max-w-6xl mx-auto px-4 text-center text-xs text-slate-500">
-            &copy; 2026 NumPredictor 1-6 App. Runs locally on your browser via LocalStorage.
-        </div>
-    </footer>
-
-    <!-- 使い方・仕様モーダル -->
-    <div id="info-modal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm hidden">
-        <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-lg w-full mx-4 p-6 shadow-2xl relative">
-            <button onclick="app.closeInfoModal()" class="absolute top-4 right-4 text-slate-400 hover:text-white transition">
-                <i class="fa-solid fa-xmark text-lg"></i>
-            </button>
-            <h3 class="text-lg font-bold text-white mb-4 flex items-center gap-2">
-                <i class="fa-solid fa-circle-question text-indigo-400"></i> アプリの仕組みと使い方
-            </h3>
-            <div class="space-y-3 text-xs text-slate-300 leading-relaxed max-h-[60vh] overflow-y-auto pr-2">
-                <p>このアプリは、1から6までの数値を入力していくことで、<strong>「直近20回以内にどの数値が出やすいか」</strong>を過去のパターンと区切り傾向から予測する分析ツールです。</p>
-                
-                <div class="bg-slate-950/50 p-3 rounded-xl border border-slate-800 space-y-2">
-                    <div class="font-bold text-indigo-400">1. 入力と「新しい区切り」</div>
-                    <p>ボタンまたはキーボード（1〜6）で数値を次々に入力します。「新しい区切り（セッション）を開始」ボタンを押すと、区切りの切れ目をリセットして新しいグループとして記録できます（現在の区切り内で何回目かも追跡します）。</p>
-                </div>
-
-                <div class="bg-slate-950/50 p-3 rounded-xl border border-slate-800 space-y-2">
-                    <div class="font-bold text-indigo-400">2. 予測スコアリングロジック</div>
-                    <p>ランキングは以下の3要素を掛け合わせて算出しています：</p>
-                    <ul class="list-disc pl-4 space-y-1 text-slate-400">
-                        <li><strong>出現間隔（未出現ウェイト）:</strong> 長く出ていない数値ほど確率の揺り戻しとしてスコアが上昇。</li>
-                        <li><strong>区切り内出現傾向:</strong> 現在の区切りの初めからの履歴で、どの数字が頻出しているかのバイアス。</li>
-                        <li><strong>マルコフ連鎖（遷移確率）:</strong> 「直前に出た数値」から「次にどの数値が出やすいか」の過去の確率マトリクス。</li>
-                    </ul>
-                </div>
+        <!-- 履歴とトレンドセクション -->
+        <section class="border-t border-slate-700 pt-5">
+            <div class="flex justify-between items-center mb-3">
+                <h3 class="text-sm font-semibold text-slate-300">📜 入力履歴 (直近15件)</h3>
+                <span class="text-xs text-slate-500">※全データは自動保存されています</span>
             </div>
-            <div class="mt-6 pt-4 border-t border-slate-800 flex justify-end">
-                <button onclick="app.closeInfoModal()" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-xl text-xs transition">
-                    閉じる
-                </button>
+            <div id="history-container" class="flex flex-wrap gap-1.5 min-h-[40px] bg-slate-900/40 p-3 rounded-xl border border-slate-800">
+                <span class="text-xs text-slate-500 italic">まだ入力がありません</span>
             </div>
-        </div>
+        </section>
     </div>
 
-    <!-- カスタム確認・通知モーダル -->
-    <div id="alert-modal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm hidden">
-        <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-sm w-full mx-4 p-6 shadow-2xl text-center">
-            <div id="alert-icon" class="w-12 h-12 rounded-full bg-indigo-500/10 text-indigo-400 flex items-center justify-center mx-auto mb-3 text-xl border border-indigo-500/20">
-                <i class="fa-solid fa-triangle-exclamation"></i>
-            </div>
-            <h4 id="alert-title" class="text-base font-bold text-white mb-2">確認</h4>
-            <p id="alert-message" class="text-xs text-slate-300 mb-6 leading-relaxed">メッセージがここに入ります。</p>
-            <div id="alert-actions" class="flex gap-2 justify-center">
-                <button id="alert-cancel-btn" onclick="app.closeAlert()" class="flex-1 py-2 px-4 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium rounded-xl border border-slate-700 transition">キャンセル</button>
-                <button id="alert-ok-btn" class="flex-1 py-2 px-4 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-medium rounded-xl transition">OK</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- メインロジック JavaScript -->
-    <script>
-        class NumberPredictorApp {
-            constructor() {
-                this.storageKey = 'num_predictor_data_v1';
-                this.loadData();
-                this.initEventListeners();
-                this.updateUI();
-            }
-
-            // ローカルストレージからデータ読み込み
-            loadData() {
-                const raw = localStorage.getItem(this.storageKey);
-                if (raw) {
-                    try {
-                        const parsed = JSON.parse(raw);
-                        this.history = parsed.history || []; // [{value: number, sessionId: number, timestamp: number}]
-                        this.currentSessionId = parsed.currentSessionId || 1;
-                        this.sessionStepCount = parsed.sessionStepCount || 0;
-                    } catch (e) {
-                        this.resetStorageData();
-                    }
-                } else {
-                    this.resetStorageData();
-                }
-            }
-
-            resetStorageData() {
-                this.history = [];
-                this.currentSessionId = 1;
-                this.sessionStepCount = 0;
-                this.saveData();
-            }
-
-            saveData() {
-                const data = {
-                    history: this.history,
-                    currentSessionId: this.currentSessionId,
-                    sessionStepCount: this.sessionStepCount
-                };
-                localStorage.setItem(this.storageKey, JSON.stringify(data));
-            }
-
-            initEventListeners() {
-                // キーボードショートカット (1〜6)
-                window.addEventListener('keydown', (e) => {
-                    // モーダル表示中や入力フォーム編集中でなければ
-                    if (['1', '2', '3', '4', '5', '6'].includes(e.key)) {
-                        if (document.activeElement.tagName === 'INPUT') return;
-                        this.inputNumber(parseInt(e.key, 10));
-                    }
-                });
-            }
-
-            // 数値入力
-            inputNumber(num) {
-                if (num < 1 || num > 6) return;
-                this.sessionStepCount++;
-                this.history.push({
-                    value: num,
-                    sessionId: this.currentSessionId,
-                    timestamp: Date.now()
-                });
-                this.saveData();
-                this.updateUI();
-            }
-
-            // 直前の入力を削除
-            undoLast() {
-                if (this.history.length === 0) {
-                    this.showAlert('通知', '削除する履歴がありません。', false);
-                    return;
-                }
-                const last = this.history.pop();
-                // セッションステップ数の調整
-                if (last.sessionId === this.currentSessionId && this.sessionStepCount > 0) {
-                    this.sessionStepCount--;
-                }
-                this.saveData();
-                this.updateUI();
-            }
-
-            // 新しい区切り（セッション）の開始
-            startNewSession() {
-                this.currentSessionId++;
-                this.sessionStepCount = 0;
-                this.saveData();
-                this.updateUI();
-            }
-
-            // 全リセットの確認
-            confirmReset() {
-                this.showConfirm('全データの消去', 'これまでの入力履歴とセッション情報をすべてリセットしますか？この操作は元に戻せますせん。', () => {
-                    this.resetStorageData();
-                    this.updateUI();
-                    this.closeAlert();
-                });
-            }
-
-            // 予測・分析アルゴリズムの中核
-            calculatePredictions() {
-                const nums = [1, 2, 3, 4, 5, 6];
-                const totalCount = this.history.length;
-
-                if (totalCount === 0) {
-                    return nums.map(n => ({ num: n, score: 0, reason: 'データ不足のため基準スコア' }));
-                }
-
-                // 1. 全体および区切り内の出現回数・未出現間隔の計算
-                const globalCounts = {1:0, 2:0, 3:0, 4:0, 5:0, 6:0};
-                const sessionCounts = {1:0, 2:0, 3:0, 4:0, 5:0, 6:0};
-                const lastSeenIndex = {1:-1, 2:-1, 3:-1, 4:-1, 5:-1, 6:-1};
-
-                this.history.forEach((item, idx) => {
-                    globalCounts[item.value]++;
-                    if (item.sessionId === this.currentSessionId) {
-                        sessionCounts[item.value]++;
-                    }
-                    lastSeenIndex[item.value] = idx;
-                });
-
-                // 2. マルコフ連鎖（直前の数値からの遷移確率）の集計
-                const transitionMatrix = {};
-                for (let i = 1; i <= 6; i++) {
-                    transitionMatrix[i] = {1:0, 2:0, 3:0, 4:0, 5:0, 6:0, total: 0};
-                }
-                for (let i = 0; i < this.history.length - 1; i++) {
-                    const current = this.history[i].value;
-                    const next = this.history[i+1].value;
-                    transitionMatrix[current][next]++;
-                    transitionMatrix[current].total++;
-                }
-
-                const lastValue = totalCount > 0 ? this.history[totalCount - 1].value : null;
-
-                // 3. 各数値のスコア算出
-                const scores = nums.map(num => {
-                    let score = 50; // ベーススコア
-                    let reasons = [];
-
-                    // 要素A: 未出現間隔 (しばらく出ていない数字ほど期待値アップの揺り戻し効果)
-                    const lastIdx = lastSeenIndex[num];
-                    const gap = lastIdx === -1 ? totalCount : (totalCount - 1 - lastIdx);
-                    if (gap >= 5) {
-                        score += gap * 2.5;
-                        reasons.push(`直近${gap}回出現なし（期待値上昇）`);
-                    } else if (gap === 0) {
-                        score -= 10;
-                        reasons.push(`直前（前回）に出現済み`);
-                    }
-
-                    // 要素B: 現在の区切り内での出現バイアス
-                    const sCount = sessionCounts[num];
-                    if (this.sessionStepCount > 3) {
-                        if (sCount === 0) {
-                            score += 15;
-                            reasons.push(`現在の区切り内で未出現`);
-                        } else {
-                            score += sCount * 3;
-                            reasons.push(`区切り内で${sCount}回出現（好調トレンド）`);
-                        }
-                    }
-
-                    // 要素C: マルコフ連鎖（直前が lastValue のときの遷移傾向）
-                    if (lastValue && transitionMatrix[lastValue].total > 0) {
-                        const tTotal = transitionMatrix[lastValue].total;
-                        const tCount = transitionMatrix[lastValue][num];
-                        const tProb = tCount / tTotal;
-                        score += tProb * 35; // 遷移確率に応じた加点
-                        if (tProb > 0.25) {
-                            reasons.push(`直前[${lastValue}]からの遷移確率が高め (${Math.round(tProb*100)}%)`);
-                        }
-                    }
-
-                    // 全体出現率のバランス補正
-                    const globalRate = globalCounts[num] / totalCount;
-                    if (globalRate < 0.12) {
-                        score += 5;
-                        reasons.push(`全体でやや出現頻度少なめ`);
-                    }
-
-                    if (reasons.length === 0) {
-                        reasons.push('平均的な出現確率パターン');
-                    }
-
-                    return {
-                        num: num,
-                        score: Math.max(10, Math.min(100, Math.round(score))),
-                        reasons: reasons,
-                        gap: gap,
-                        sessionCount: sCount
-                    };
-                });
-
-                // スコア順にソート (高い順)
-                scores.sort((a, b) => b.score - a.score);
-                return scores;
-            }
-
-            // UIの更新
-            updateUI() {
-                // セッション関連バッジ
-                document.getElementById('session-count-badge').textContent = `区切り #${this.currentSessionId} (${this.sessionStepCount}回目)`;
-                document.getElementById('current-step-num').textContent = this.sessionStepCount;
-                
-                const progressPercent = Math.min(100, Math.round((this.sessionStepCount / 20) * 100));
-                document.getElementById('progress-percent').textContent = `${progressPercent}%`;
-
-                // 履歴ピルスの描画
-                const historyContainer = document.getElementById('history-pills');
-                document.getElementById('total-history-count').textContent = `全 ${this.history.length} 件`;
-
-                if (this.history.length === 0) {
-                    historyContainer.innerHTML = `<span class="text-xs text-slate-500 italic p-1">まだ入力履歴がありません。数値を入力してください。</span>`;
-                } else {
-                    historyContainer.innerHTML = this.history.slice(-30).reverse().map((item, idx) => `
-                        <div class="flex items-center gap-1 bg-slate-900 border border-slate-800 px-2.5 py-1 rounded-lg text-xs">
-                            <span class="font-bold text-indigo-400">${item.value}</span>
-                            <span class="text-[10px] text-slate-500">(S#${item.sessionId})</span>
-                        </div>
-                    `).join('');
-                }
-
-                // 予測ランキング描画
-                const rankings = this.calculatePredictions();
-                const rankingListEl = document.getElementById('ranking-list');
-
-                if (this.history.length === 0) {
-                    rankingListEl.innerHTML = `<div class="text-center py-10 text-slate-500 text-sm">データを入力すると、予測ランキングがここに表示されます。</div>`;
-                    document.getElementById('analysis-insights').innerHTML = `<p class="text-slate-500 italic">データが蓄積されると、直近の出現間隔の偏りや区切りごとの傾向が表示されます。</p>`;
-                    return;
-                }
-
-                const medals = [
-                    '<span class="w-6 h-6 rounded-full bg-amber-500/20 text-amber-400 border border-amber-500/30 flex items-center justify-center font-bold text-xs">1</span>',
-                    '<span class="w-6 h-6 rounded-full bg-slate-300/20 text-slate-300 border border-slate-300/30 flex items-center justify-center font-bold text-xs">2</span>',
-                    '<span class="w-6 h-6 rounded-full bg-amber-700/20 text-amber-600 border border-amber-700/30 flex items-center justify-center font-bold text-xs">3</span>',
-                    '<span class="w-6 h-6 rounded-full bg-slate-800 text-slate-400 flex items-center justify-center font-bold text-xs">4</span>',
-                    '<span class="w-6 h-6 rounded-full bg-slate-800 text-slate-400 flex items-center justify-center font-bold text-xs">5</span>',
-                    '<span class="w-6 h-6 rounded-full bg-slate-800 text-slate-400 flex items-center justify-center font-bold text-xs">6</span>',
-                ];
-
-                rankingListEl.innerHTML = rankings.map((item, rank) => `
-                    <div class="bg-slate-950/60 border border-slate-800/80 rounded-xl p-4 flex items-center justify-between gap-4 transition hover:border-slate-700">
-                        <div class="flex items-center gap-3">
-                            ${medals[rank]}
-                            <div class="w-10 h-10 rounded-xl bg-indigo-600/20 border border-indigo-500/30 flex items-center justify-center text-lg font-bold text-white shadow-inner">
-                                ${item.num}
-                            </div>
-                            <div>
-                                <div class="text-xs font-semibold text-slate-300">第 ${rank + 1} 位予測</div>
-                                <div class="text-[11px] text-slate-400 mt-0.5">${item.reasons.join(' / ')}</div>
-                            </div>
-                        </div>
-                        <div class="text-right">
-                            <div class="text-xs font-bold text-indigo-400">${item.score} pt</div>
-                            <div class="text-[10px] text-slate-500">出現間隔: ${item.gap}回</div>
-                        </div>
-                    </div>
-                `).join('');
-
-                // 分析サマリーの構築
-                const topPick = rankings[0];
-                const lowestPick = rankings[5];
-                const lastVal = this.history[this.history.length - 1].value;
-                
-                document.getElementById('analysis-insights').innerHTML = `
-                    <p>• <strong>最有力数値 [ ${topPick.num} ]</strong>: スコア ${topPick.score}pt。${topPick.reasons[0]}。</p>
-                    <p>• <strong>直前の数値 [ ${lastVal} ]</strong> からのマルコフ連鎖遷移傾向と、現在の区切り（#${this.currentSessionId} / ${this.sessionStepCount}回目）の偏りを統合して算出しています。</p>
-                    <p>• <strong>注意数値 [ ${lowestPick.num} ]</strong>: スコアが最も低く、直近での出現頻度過多または遷移確率が低めです。</p>
-                `;
-            }
-
-            // JSON出力機能
-            exportData() {
-                const data = {
-                    history: this.history,
-                    currentSessionId: this.currentSessionId,
-                    exportedAt: new Date().toISOString()
-                };
-                const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = `num-predictor-data-${Date.now()}.json`;
-                a.click();
-                URL.revokeObjectURL(url);
-            }
-
-            // モーダル管理
-            openInfoModal() {
-                document.getElementById('info-modal').classList.remove('hidden');
-            }
-
-            closeInfoModal() {
-                document.getElementById('info-modal').classList.add('hidden');
-            }
-
-            showAlert(title, message, isConfirm = false, onOk = null) {
-                const modal = document.getElementById('alert-modal');
-                document.getElementById('alert-title').textContent = title;
-                document.getElementById('alert-message').textContent = message;
-                
-                const cancelBtn = document.getElementById('alert-cancel-btn');
-                const okBtn = document.getElementById('alert-ok-btn');
-
-                if (isConfirm) {
-                    cancelBtn.classList.remove('hidden');
-                    okBtn.onclick = () => {
-                        if (onOk) onOk();
-                        this.closeAlert();
-                    };
-                } else {
-                    cancelBtn.classList.add('hidden');
-                    okBtn.onclick = () => this.closeAlert();
-                }
-                modal.classList.remove('hidden');
-            }
-
-            showConfirm(title, message, onOk) {
-                this.showAlert(title, message, true, onOk);
-            }
-
-            closeAlert() {
-                document.getElementById('alert-modal').classList.add('hidden');
-            }
-        }
-
-        // アプリケーション起動
-        const app = new NumberPredictorApp();
-    </script>
+    <!-- JavaScriptの読み込み -->
+    <script src="script.js"></script>
 </body>
 </html>
