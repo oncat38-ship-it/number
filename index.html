@@ -7,14 +7,12 @@
     <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        /* カスタムスタイルやアニメーション微調整 */
         body {
             font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
         }
         .num-btn:active {
             transform: scale(0.95);
         }
-        /* ランキングバーのアニメーション */
         .prediction-bar {
             transition: width 0.4s ease-in-out;
         }
@@ -24,8 +22,8 @@
 
     <div class="max-w-xl w-full bg-slate-800 rounded-2xl shadow-xl p-6 border border-slate-700">
         <header class="text-center mb-6">
-            <h1 class="text-2xl font-bold tracking-tight text-indigo-400">🔢 1-6 ナンバー予測アナライザー</h1>
-            <p class="text-sm text-slate-400 mt-1">過去のパターンと区切り傾向から、20回以内の出現確率を予測します</p>
+            <h1 class="text-2xl font-bold tracking-tight text-indigo-400">🔢 1-6 パターン予測アナライザー</h1>
+            <p class="text-sm text-slate-400 mt-1">直近の勢い・遷移パターン・区切りの流れから20回以内の確率を予測</p>
         </header>
 
         <!-- コントロール・区切りセクション -->
@@ -64,8 +62,8 @@
         <!-- 予測ランキングセクション -->
         <section class="mb-8">
             <div class="flex justify-between items-center mb-3">
-                <h2 class="text-lg font-semibold text-slate-200">🏆 20回以内 出現確率予測ランキング</h2>
-                <span class="text-xs text-indigo-400 bg-indigo-950 px-2 py-1 rounded border border-indigo-800/50">全体＋区切りハイブリッド</span>
+                <h2 class="text-lg font-semibold text-slate-200">🏆 パターン予測ランキング</h2>
+                <span class="text-xs text-indigo-400 bg-indigo-950 px-2 py-1 rounded border border-indigo-800/50">勢い・遷移重視</span>
             </div>
             <div id="prediction-list" class="space-y-2.5">
                 <!-- 動的にランキング項目が挿入されます -->
@@ -84,32 +82,24 @@
         </section>
     </div>
 
-    <!-- JavaScriptのロジック -->
+    <!-- JavaScriptのロジック (パターン・勢い重視型) -->
     <script>
-        // アプリの状態データ
         let state = {
-            history: [], // 全履歴: [{num: 3, sessionId: 1}, ...]
+            history: [], 
             sessions: [{ id: 1, name: "区切り #1" }]
         };
 
-        // ローカルストレージからの読み込み
         function loadData() {
-            const saved = localStorage.getItem('number_predictor_state');
+            const saved = localStorage.getItem('number_predictor_pattern_state');
             if (saved) {
-                try {
-                    state = JSON.parse(saved);
-                } catch (e) {
-                    console.error("データの読み込みに失敗しました", e);
-                }
+                try { state = JSON.parse(saved); } catch (e) { console.error(e); }
             }
         }
 
-        // ローカルストレージへの保存
         function saveData() {
-            localStorage.setItem('number_predictor_state', JSON.stringify(state));
+            localStorage.setItem('number_predictor_pattern_state', JSON.stringify(state));
         }
 
-        // 現在のセッションID取得
         function getCurrentSessionId() {
             if (state.sessions.length === 0) {
                 state.sessions.push({ id: 1, name: "区切り #1" });
@@ -117,7 +107,6 @@
             return state.sessions[state.sessions.length - 1].id;
         }
 
-        // 数値追加処理
         function addNumber(num) {
             const sessionId = getCurrentSessionId();
             state.history.push({ num: parseInt(num), sessionId: sessionId });
@@ -125,7 +114,6 @@
             updateUI();
         }
 
-        // 直前の入力を取り消す
         function undo() {
             if (state.history.length > 0) {
                 state.history.pop();
@@ -134,7 +122,6 @@
             }
         }
 
-        // 新しい区切りを開始
         function startNewSession() {
             const newId = state.sessions.length + 1;
             state.sessions.push({ id: newId, name: `区切り #${newId}` });
@@ -142,25 +129,20 @@
             updateUI();
         }
 
-        // 全リセット
         function resetAll() {
             if (confirm("すべての履歴と区切りデータをリセットしますか？")) {
-                state = {
-                    history: [],
-                    sessions: [{ id: 1, name: "区切り #1" }]
-                };
+                state = { history: [], sessions: [{ id: 1, name: "区切り #1" }] };
                 saveData();
                 updateUI();
             }
         }
 
-        // 予測・分析ロジック
+        // --- パターン・勢い重視の予測ロジック ---
         function calculatePredictions() {
             const history = state.history;
             const currentSessionId = getCurrentSessionId();
             const total = history.length;
 
-            // 基本スコアの初期化 (1〜6)
             let scores = { 1: 50, 2: 50, 3: 50, 4: 50, 5: 50, 6: 50 };
 
             if (total === 0) {
@@ -174,32 +156,14 @@
                 ];
             }
 
-            // 1. 全体出現頻度ベースの調整（揺り戻し考慮）
-            const counts = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0 };
-            history.forEach(item => counts[item.num]++);
-            
-            const avgCount = total / 6;
-            for (let i = 1; i <= 6; i++) {
-                const diff = avgCount - counts[i];
-                scores[i] += diff * 3;
-            }
+            // 1. 直近の勢い（ホットハンド）評価
+            // 直近の数回（例:最大直近12回）の中で、頻繁に出現している数字にボーナスを与える
+            const recentWindow = history.slice(-12);
+            recentWindow.forEach(item => {
+                scores[item.num] += 8; // 直近で出ている数字の勢いを評価
+            });
 
-            // 2. 直近の出現間隔（何回出ていないか）の考慮
-            for (let i = 1; i <= 6; i++) {
-                let lastIndex = -1;
-                for (let idx = history.length - 1; idx >= 0; idx--) {
-                    if (history[idx].num === i) {
-                        lastIndex = idx;
-                        break;
-                    }
-                }
-                const gap = lastIndex === -1 ? total : (total - 1 - lastIndex);
-                if (gap >= 10) {
-                    scores[i] += 15; // 長く出ていないものは確率アップ
-                }
-            }
-
-            // 3. マルコフ連鎖（直前の数値からの遷移傾向）
+            // 2. マルコフ連鎖（直前の数値からの遷移パターン）の強力な反映
             if (total >= 2) {
                 const lastNum = history[history.length - 1].num;
                 let transitionCounts = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0 };
@@ -216,29 +180,47 @@
                 if (transitionTotal > 0) {
                     for (let i = 1; i <= 6; i++) {
                         const transProb = transitionCounts[i] / transitionTotal;
-                        scores[i] += transProb * 40;
+                        scores[i] += transProb * 60; // 遷移パターンの一致度に高い重み付け
                     }
                 }
             }
 
-            // 4. 現在の区切り（セッション）内での傾向
+            // 3. 「一区切りの初め」からの傾向を考慮
             const currentSessionHistory = history.filter(item => item.sessionId === currentSessionId);
-            if (currentSessionHistory.length > 0) {
-                const sessionCounts = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0 };
-                currentSessionHistory.forEach(item => sessionCounts[item.num]++);
-                
-                const sessionTotal = currentSessionHistory.length;
-                for (let i = 1; i <= 6; i++) {
-                    if (sessionTotal <= 5) {
-                        if (sessionCounts[i] === 0) scores[i] += 10;
-                    } else {
-                        const sessionAvg = sessionTotal / 6;
-                        scores[i] += (sessionAvg - sessionCounts[i]) * 2;
+            const sessionPos = currentSessionHistory.length;
+
+            if (sessionPos > 0) {
+                // 過去のすべての区切りにおける、同じ位置（1番目、2番目…）での出現傾向を探す
+                let posMatchCounts = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0 };
+                let posMatchTotal = 0;
+
+                // 過去の各区切りをスライスして、同じインデックスの数値を集計
+                let sessionGroups = {};
+                history.forEach(item => {
+                    if (!sessionGroups[item.sessionId]) sessionGroups[item.sessionId] = [];
+                    sessionGroups[item.sessionId].push(item.num);
+                });
+
+                Object.keys(sessionGroups).forEach(sId => {
+                    const sList = sessionGroups[sId];
+                    // 現在の区切りの進行度（sessionPos - 1）と同じ位置のデータがあれば集計
+                    const targetIdx = sessionPos - 1;
+                    if (sList[targetIdx] !== undefined && sId != currentSessionId) {
+                        posMatchCounts[sList[targetIdx]]++;
+                        posMatchTotal++;
+                    }
+                });
+
+                // 過去の区切りの同じタイミングで出ていた傾向があればボーナス
+                if (posMatchTotal > 0) {
+                    for (let i = 1; i <= 6; i++) {
+                        const pRate = posMatchCounts[i] / posMatchTotal;
+                        scores[i] += pRate * 40;
                     }
                 }
             }
 
-            // スコアを確率パーセンテージ風に正規化
+            // スコアの正規化
             let totalScore = 0;
             for (let i = 1; i <= 6; i++) {
                 if (scores[i] < 5) scores[i] = 5;
@@ -259,7 +241,6 @@
             return results;
         }
 
-        // 画面の更新
         function updateUI() {
             document.getElementById('total-count').textContent = state.history.length;
 
@@ -268,7 +249,6 @@
 
             document.getElementById('btn-undo').disabled = state.history.length === 0;
 
-            // 履歴の描画 (直近15件)
             const historyContainer = document.getElementById('history-container');
             if (state.history.length === 0) {
                 historyContainer.innerHTML = '<span class="text-xs text-slate-500 italic">まだ入力がありません</span>';
@@ -283,7 +263,6 @@
                 });
             }
 
-            // 予測ランキングの描画
             const predictions = calculatePredictions();
             const predictionList = document.getElementById('prediction-list');
             predictionList.innerHTML = '';
@@ -312,19 +291,17 @@
                         <span class="text-sm font-bold text-slate-200">${pred.rate}</span>
                     </div>
                 `;
-                predictionList.appendChild(itemDiv);
+                predictionList.predictionList ? null : predictionList.appendChild(itemDiv);
             });
         }
 
-        // イベントリスナーの設定
         document.addEventListener('DOMContentLoaded', () => {
             loadData();
             updateUI();
 
             document.querySelectorAll('.num-btn').forEach(button => {
                 button.addEventListener('click', () => {
-                    const num = button.getAttribute('data-num');
-                    addNumber(num);
+                    addNumber(button.getAttribute('data-num'));
                 });
             });
 
