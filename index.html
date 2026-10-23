@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>数字パターン予測アプリ (1-6)</title>
+    <title>数字パターン予測アプリ (0-6)</title>
     <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
@@ -22,7 +22,7 @@
 
     <div class="max-w-xl w-full bg-slate-800 rounded-2xl shadow-xl p-6 border border-slate-700">
         <header class="text-center mb-6">
-            <h1 class="text-2xl font-bold tracking-tight text-indigo-400">🔢 1-6 パターン予測アナライザー</h1>
+            <h1 class="text-2xl font-bold tracking-tight text-indigo-400">🔢 0-6 パターン予測アナライザー</h1>
             <p class="text-sm text-slate-400 mt-1">直近の勢い・遷移パターン・区切りの流れから20回以内の確率を予測</p>
         </header>
 
@@ -42,10 +42,11 @@
             </div>
         </section>
 
-        <!-- 数字入力セクション (1〜6ボタン) -->
+        <!-- 数字入力セクション (0〜6ボタン) -->
         <section class="mb-8 text-center">
-            <label class="block text-sm font-medium text-slate-300 mb-3">数値を入力 (クリックまたはキーボード 1〜6)</label>
-            <div class="grid grid-cols-6 gap-2">
+            <label class="block text-sm font-medium text-slate-300 mb-3">数値を入力 (ボタン・数字キー・テンキー 0〜6)</label>
+            <div class="grid grid-cols-7 gap-1.5 sm:gap-2">
+                <button data-num="0" class="num-btn bg-slate-700 hover:bg-indigo-600 text-xl font-bold py-4 rounded-xl border border-slate-600 transition shadow">0</button>
                 <button data-num="1" class="num-btn bg-slate-700 hover:bg-indigo-600 text-xl font-bold py-4 rounded-xl border border-slate-600 transition shadow">1</button>
                 <button data-num="2" class="num-btn bg-slate-700 hover:bg-indigo-600 text-xl font-bold py-4 rounded-xl border border-slate-600 transition shadow">2</button>
                 <button data-num="3" class="num-btn bg-slate-700 hover:bg-indigo-600 text-xl font-bold py-4 rounded-xl border border-slate-600 transition shadow">3</button>
@@ -55,14 +56,14 @@
             </div>
             <div class="mt-3 flex justify-between items-center text-xs text-slate-400 px-1">
                 <span>総入力回数: <strong id="total-count" class="text-white">0</strong> 回</span>
-                <button id="btn-undo" class="hover:text-slate-200 underline disabled:opacity-50" disabled>直前の入力を取り消す</button>
+                <button id="btn-undo" class="hover:text-slate-200 underline disabled:opacity-50" disabled>直前の入力を取り消す (Backspace)</button>
             </div>
         </section>
 
         <!-- 予測ランキングセクション -->
         <section class="mb-8">
             <div class="flex justify-between items-center mb-3">
-                <h2 class="text-lg font-semibold text-slate-200">🏆 パターン予測ランキング</h2>
+                <h2 class="text-lg font-semibold text-slate-200">🏆 パターン予測ランキング (0-6)</h2>
                 <span class="text-xs text-indigo-400 bg-indigo-950 px-2 py-1 rounded border border-indigo-800/50">勢い・遷移重視</span>
             </div>
             <div id="prediction-list" class="space-y-2.5">
@@ -82,22 +83,24 @@
         </section>
     </div>
 
-    <!-- JavaScriptのロジック (パターン・勢い重視型) -->
+    <!-- JavaScriptのロジック (0〜6対応 & キーボード入力調整) -->
     <script>
         let state = {
             history: [], 
             sessions: [{ id: 1, name: "区切り #1" }]
         };
 
+        const NUMBERS = [0, 1, 2, 3, 4, 5, 6];
+
         function loadData() {
-            const saved = localStorage.getItem('number_predictor_pattern_state');
+            const saved = localStorage.getItem('number_predictor_pattern_0to6_state');
             if (saved) {
                 try { state = JSON.parse(saved); } catch (e) { console.error(e); }
             }
         }
 
         function saveData() {
-            localStorage.setItem('number_predictor_pattern_state', JSON.stringify(state));
+            localStorage.setItem('number_predictor_pattern_0to6_state', JSON.stringify(state));
         }
 
         function getCurrentSessionId() {
@@ -108,8 +111,11 @@
         }
 
         function addNumber(num) {
+            const parsedNum = parseInt(num);
+            if (isNaN(parsedNum) || !NUMBERS.includes(parsedNum)) return;
+            
             const sessionId = getCurrentSessionId();
-            state.history.push({ num: parseInt(num), sessionId: sessionId });
+            state.history.push({ num: parsedNum, sessionId: sessionId });
             saveData();
             updateUI();
         }
@@ -137,64 +143,65 @@
             }
         }
 
-        // --- パターン・勢い重視の予測ロジック ---
+        // --- パターン・勢い重視の予測ロジック (0〜6) ---
         function calculatePredictions() {
             const history = state.history;
             const currentSessionId = getCurrentSessionId();
             const total = history.length;
 
-            let scores = { 1: 50, 2: 50, 3: 50, 4: 50, 5: 50, 6: 50 };
+            let scores = {};
+            NUMBERS.forEach(n => scores[n] = 50);
 
             if (total === 0) {
-                return [
-                    { num: 1, score: 50, rate: "16.7%" },
-                    { num: 2, score: 50, rate: "16.7%" },
-                    { num: 3, score: 50, rate: "16.7%" },
-                    { num: 4, score: 50, rate: "16.7%" },
-                    { num: 5, score: 50, rate: "16.7%" },
-                    { num: 6, score: 50, rate: "16.7%" }
-                ];
+                return NUMBERS.map(n => ({
+                    num: n,
+                    score: 50,
+                    rate: (100 / NUMBERS.length).toFixed(1) + "%"
+                }));
             }
 
             // 1. 直近の勢い（ホットハンド）評価
-            // 直近の数回（例:最大直近12回）の中で、頻繁に出現している数字にボーナスを与える
             const recentWindow = history.slice(-12);
             recentWindow.forEach(item => {
-                scores[item.num] += 8; // 直近で出ている数字の勢いを評価
+                if (scores[item.num] !== undefined) {
+                    scores[item.num] += 8;
+                }
             });
 
-            // 2. マルコフ連鎖（直前の数値からの遷移パターン）の強力な反映
+            // 2. マルコフ連鎖（直前の数値からの遷移パターン）
             if (total >= 2) {
                 const lastNum = history[history.length - 1].num;
-                let transitionCounts = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0 };
+                let transitionCounts = {};
+                NUMBERS.forEach(n => transitionCounts[n] = 0);
                 let transitionTotal = 0;
 
                 for (let i = 0; i < history.length - 1; i++) {
                     if (history[i].num === lastNum) {
                         const nextNum = history[i + 1].num;
-                        transitionCounts[nextNum]++;
-                        transitionTotal++;
+                        if (transitionCounts[nextNum] !== undefined) {
+                            transitionCounts[nextNum]++;
+                            transitionTotal++;
+                        }
                     }
                 }
 
                 if (transitionTotal > 0) {
-                    for (let i = 1; i <= 6; i++) {
-                        const transProb = transitionCounts[i] / transitionTotal;
-                        scores[i] += transProb * 60; // 遷移パターンの一致度に高い重み付け
-                    }
+                    NUMBERS.forEach(n => {
+                        const transProb = transitionCounts[n] / transitionTotal;
+                        scores[n] += transProb * 60;
+                    });
                 }
             }
 
-            // 3. 「一区切りの初め」からの傾向を考慮
+            // 3. 「一区切りの初め」からの進行度パターン
             const currentSessionHistory = history.filter(item => item.sessionId === currentSessionId);
             const sessionPos = currentSessionHistory.length;
 
             if (sessionPos > 0) {
-                // 過去のすべての区切りにおける、同じ位置（1番目、2番目…）での出現傾向を探す
-                let posMatchCounts = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0 };
+                let posMatchCounts = {};
+                NUMBERS.forEach(n => posMatchCounts[n] = 0);
                 let posMatchTotal = 0;
 
-                // 過去の各区切りをスライスして、同じインデックスの数値を集計
                 let sessionGroups = {};
                 history.forEach(item => {
                     if (!sessionGroups[item.sessionId]) sessionGroups[item.sessionId] = [];
@@ -203,39 +210,39 @@
 
                 Object.keys(sessionGroups).forEach(sId => {
                     const sList = sessionGroups[sId];
-                    // 現在の区切りの進行度（sessionPos - 1）と同じ位置のデータがあれば集計
                     const targetIdx = sessionPos - 1;
                     if (sList[targetIdx] !== undefined && sId != currentSessionId) {
-                        posMatchCounts[sList[targetIdx]]++;
-                        posMatchTotal++;
+                        const targetNum = sList[targetIdx];
+                        if (posMatchCounts[targetNum] !== undefined) {
+                            posMatchCounts[targetNum]++;
+                            posMatchTotal++;
+                        }
                     }
                 });
 
-                // 過去の区切りの同じタイミングで出ていた傾向があればボーナス
                 if (posMatchTotal > 0) {
-                    for (let i = 1; i <= 6; i++) {
-                        const pRate = posMatchCounts[i] / posMatchTotal;
-                        scores[i] += pRate * 40;
-                    }
+                    NUMBERS.forEach(n => {
+                        const pRate = posMatchCounts[n] / posMatchTotal;
+                        scores[n] += pRate * 40;
+                    });
                 }
             }
 
-            // スコアの正規化
+            // スコアの正規化と確率計算
             let totalScore = 0;
-            for (let i = 1; i <= 6; i++) {
-                if (scores[i] < 5) scores[i] = 5;
-                totalScore += scores[i];
-            }
+            NUMBERS.forEach(n => {
+                if (scores[n] < 5) scores[n] = 5;
+                totalScore += scores[n];
+            });
 
-            let results = [];
-            for (let i = 1; i <= 6; i++) {
-                let probability = (scores[i] / totalScore) * 100;
-                results.push({
-                    num: i,
-                    score: scores[i],
+            let results = NUMBERS.map(n => {
+                let probability = (scores[n] / totalScore) * 100;
+                return {
+                    num: n,
+                    score: scores[n],
                     rate: probability.toFixed(1) + "%"
-                });
-            }
+                };
+            });
 
             results.sort((a, b) => b.score - a.score);
             return results;
@@ -291,7 +298,7 @@
                         <span class="text-sm font-bold text-slate-200">${pred.rate}</span>
                     </div>
                 `;
-                predictionList.predictionList ? null : predictionList.appendChild(itemDiv);
+                predictionList.appendChild(itemDiv);
             });
         }
 
@@ -299,16 +306,23 @@
             loadData();
             updateUI();
 
+            // クリック入力
             document.querySelectorAll('.num-btn').forEach(button => {
                 button.addEventListener('click', () => {
                     addNumber(button.getAttribute('data-num'));
                 });
             });
 
+            // キーボード＆テンキー入力サポート
             document.addEventListener('keydown', (e) => {
-                if (['1', '2', '3', '4', '5', '6'].includes(e.key)) {
+                // 入力フォーム等にフォーカスがある場合は発動しない
+                if (['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement.tagName)) return;
+
+                // 通常の数字キーおよびテンキー (Numpad) の両方に対応
+                const validKeys = ['0', '1', '2', '3', '4', '5', '6'];
+                if (validKeys.includes(e.key)) {
                     addNumber(e.key);
-                } else if (e.key === 'Backspace' || e.key === 'z') {
+                } else if (e.key === 'Backspace' || e.key === 'z' || e.key === 'Z') {
                     undo();
                 }
             });
