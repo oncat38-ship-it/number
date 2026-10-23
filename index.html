@@ -22,8 +22,8 @@
 
     <div class="max-w-xl w-full bg-slate-800 rounded-2xl shadow-xl p-6 border border-slate-700">
         <header class="text-center mb-6">
-            <h1 class="text-2xl font-bold tracking-tight text-indigo-400">🔢 0-6 パターン予測アナライザー</h1>
-            <p class="text-sm text-slate-400 mt-1">直近の勢い・遷移パターン・区切りの流れから20回以内の確率を予測</p>
+            <h1 class="text-2xl font-bold tracking-tight text-indigo-400">🔢 0-6 パターン＆ペア相関予測</h1>
+            <p class="text-sm text-slate-400 mt-1">区切り内傾向・遷移パターン・ペア連動性（1-2, 3-4, 5-6）から予測</p>
         </header>
 
         <!-- コントロール・区切りセクション -->
@@ -63,8 +63,8 @@
         <!-- 予測ランキングセクション -->
         <section class="mb-8">
             <div class="flex justify-between items-center mb-3">
-                <h2 class="text-lg font-semibold text-slate-200">🏆 パターン予測ランキング (0-6)</h2>
-                <span class="text-xs text-indigo-400 bg-indigo-950 px-2 py-1 rounded border border-indigo-800/50">勢い・遷移重視</span>
+                <h2 class="text-lg font-semibold text-slate-200">🏆 出現確率予測ランキング</h2>
+                <span class="text-xs text-indigo-400 bg-indigo-950 px-2 py-1 rounded border border-indigo-800/50">ペア相関・区切り独立型</span>
             </div>
             <div id="prediction-list" class="space-y-2.5">
                 <!-- 動的にランキング項目が挿入されます -->
@@ -83,7 +83,7 @@
         </section>
     </div>
 
-    <!-- JavaScriptのロジック (0〜6対応 & キーボード入力調整) -->
+    <!-- JavaScriptのロジック (ペア相関・区切り傾向重視) -->
     <script>
         let state = {
             history: [], 
@@ -91,16 +91,22 @@
         };
 
         const NUMBERS = [0, 1, 2, 3, 4, 5, 6];
+        // 関連の深いペア定義 (1-2, 3-4, 5-6)
+        const PAIRS = {
+            1: 2, 2: 1,
+            3: 4, 4: 3,
+            5: 6, 6: 5
+        };
 
         function loadData() {
-            const saved = localStorage.getItem('number_predictor_pattern_0to6_state');
+            const saved = localStorage.getItem('number_predictor_pair_state');
             if (saved) {
                 try { state = JSON.parse(saved); } catch (e) { console.error(e); }
             }
         }
 
         function saveData() {
-            localStorage.setItem('number_predictor_pattern_0to6_state', JSON.stringify(state));
+            localStorage.setItem('number_predictor_pair_state', JSON.stringify(state));
         }
 
         function getCurrentSessionId() {
@@ -143,32 +149,44 @@
             }
         }
 
-        // --- パターン・勢い重視の予測ロジック (0〜6) ---
+        // --- 確率・パターン予測コアロジック ---
         function calculatePredictions() {
             const history = state.history;
             const currentSessionId = getCurrentSessionId();
             const total = history.length;
 
-            let scores = {};
-            NUMBERS.forEach(n => scores[n] = 50);
+            // 0は他の数字(100)の6分の1の出やすさ(約16.7)を初期スコア（基本比率）とする
+            let scores = {
+                0: 16.7,
+                1: 100,
+                2: 100,
+                3: 100,
+                4: 100,
+                5: 100,
+                6: 100
+            };
 
             if (total === 0) {
-                return NUMBERS.map(n => ({
-                    num: n,
-                    score: 50,
-                    rate: (100 / NUMBERS.length).toFixed(1) + "%"
-                }));
+                return formatResults(scores);
             }
 
-            // 1. 直近の勢い（ホットハンド）評価
-            const recentWindow = history.slice(-12);
-            recentWindow.forEach(item => {
-                if (scores[item.num] !== undefined) {
-                    scores[item.num] += 8;
-                }
-            });
+            // --- 1. 区切り（セッション）内のデータを抽出 ---
+            const currentSessionHistory = history.filter(item => item.sessionId === currentSessionId);
+            const currentNums = currentSessionHistory.map(item => item.num);
+            const sessionTotal = currentNums.length;
 
-            // 2. マルコフ連鎖（直前の数値からの遷移パターン）
+            // --- 2. 直近（区切り内）の出現分布と勢い（ホットハンド） ---
+            if (sessionTotal > 0) {
+                // 区切り内での直近（最大8件）の出具合
+                const recentWindow = currentNums.slice(-8);
+                recentWindow.forEach((num, idx) => {
+                    // 直近になればなるほど強い重み付け
+                    const weight = (idx + 1) * 3;
+                    scores[num] += (num === 0 ? weight * 0.2 : weight); // 0は影響度も1/6寄りに調整
+                });
+            }
+
+            // --- 3. 過去全体の遷移パターン（マルコフ連鎖） ---
             if (total >= 2) {
                 const lastNum = history[history.length - 1].num;
                 let transitionCounts = {};
@@ -178,60 +196,64 @@
                 for (let i = 0; i < history.length - 1; i++) {
                     if (history[i].num === lastNum) {
                         const nextNum = history[i + 1].num;
-                        if (transitionCounts[nextNum] !== undefined) {
-                            transitionCounts[nextNum]++;
-                            transitionTotal++;
-                        }
+                        transitionCounts[nextNum]++;
+                        transitionTotal++;
                     }
                 }
 
                 if (transitionTotal > 0) {
                     NUMBERS.forEach(n => {
                         const transProb = transitionCounts[n] / transitionTotal;
-                        scores[n] += transProb * 60;
+                        const factor = n === 0 ? 10 : 60;
+                        scores[n] += transProb * factor;
                     });
                 }
             }
 
-            // 3. 「一区切りの初め」からの進行度パターン
-            const currentSessionHistory = history.filter(item => item.sessionId === currentSessionId);
-            const sessionPos = currentSessionHistory.length;
+            // --- 4. 近しいペア（1-2, 3-4, 5-6）の連動相関分析 ---
+            if (sessionTotal > 0) {
+                const pairList = [[1, 2], [3, 4], [5, 6]];
 
-            if (sessionPos > 0) {
-                let posMatchCounts = {};
-                NUMBERS.forEach(n => posMatchCounts[n] = 0);
-                let posMatchTotal = 0;
+                pairList.forEach(([a, b]) => {
+                    const countA = currentNums.filter(x => x === a).length;
+                    const countB = currentNums.filter(x => x === b).length;
+                    const recent6 = currentNums.slice(-6);
+                    const recentA = recent6.filter(x => x === a).length;
+                    const recentB = recent6.filter(x => x === b).length;
 
-                let sessionGroups = {};
-                history.forEach(item => {
-                    if (!sessionGroups[item.sessionId]) sessionGroups[item.sessionId] = [];
-                    sessionGroups[item.sessionId].push(item.num);
-                });
+                    // パターンA: 片方がかなり多く出ているのに相方が全く出ない場合（非対称・不相関）
+                    if (countA >= 3 && countB === 0) {
+                        scores[b] -= 15; // 相方Bの無闇な上昇を抑止
+                    } else if (countB >= 3 && countA === 0) {
+                        scores[a] -= 15;
+                    }
 
-                Object.keys(sessionGroups).forEach(sId => {
-                    const sList = sessionGroups[sId];
-                    const targetIdx = sessionPos - 1;
-                    if (sList[targetIdx] !== undefined && sId != currentSessionId) {
-                        const targetNum = sList[targetIdx];
-                        if (posMatchCounts[targetNum] !== undefined) {
-                            posMatchCounts[targetNum]++;
-                            posMatchTotal++;
+                    // パターンB: 両方がバランスよく出始めている場合（ペア活性化）
+                    if (countA >= 1 && countB >= 1 && (recentA > 0 || recentB > 0)) {
+                        scores[a] += 15;
+                        scores[b] += 15;
+                    }
+
+                    // パターンC: しばらく両方沈黙していた後、片方が出現（再燃兆候）
+                    if (recent6.length >= 4) {
+                        const lastNum = currentNums[currentNums.length - 1];
+                        if (lastNum === a && recentB === 0) {
+                            scores[b] += 12; // aが出たことで相方bの連動確率を少し底上げ
+                        } else if (lastNum === b && recentA === 0) {
+                            scores[a] += 12;
                         }
                     }
                 });
-
-                if (posMatchTotal > 0) {
-                    NUMBERS.forEach(n => {
-                        const pRate = posMatchCounts[n] / posMatchTotal;
-                        scores[n] += pRate * 40;
-                    });
-                }
             }
 
-            // スコアの正規化と確率計算
+            return formatResults(scores);
+        }
+
+        // スコアから％確率結果の生成・ソート
+        function formatResults(scores) {
             let totalScore = 0;
             NUMBERS.forEach(n => {
-                if (scores[n] < 5) scores[n] = 5;
+                if (scores[n] < 1) scores[n] = 1; // 最小ガード
                 totalScore += scores[n];
             });
 
@@ -306,19 +328,15 @@
             loadData();
             updateUI();
 
-            // クリック入力
             document.querySelectorAll('.num-btn').forEach(button => {
                 button.addEventListener('click', () => {
                     addNumber(button.getAttribute('data-num'));
                 });
             });
 
-            // キーボード＆テンキー入力サポート
             document.addEventListener('keydown', (e) => {
-                // 入力フォーム等にフォーカスがある場合は発動しない
                 if (['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement.tagName)) return;
 
-                // 通常の数字キーおよびテンキー (Numpad) の両方に対応
                 const validKeys = ['0', '1', '2', '3', '4', '5', '6'];
                 if (validKeys.includes(e.key)) {
                     addNumber(e.key);
