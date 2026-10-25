@@ -22,20 +22,20 @@
 
     <div class="max-w-xl w-full bg-slate-800 rounded-2xl shadow-xl p-6 border border-slate-700">
         <header class="text-center mb-5">
-            <h1 class="text-2xl font-bold tracking-tight text-indigo-400">🔢 10回クール検証 ＆ パターン予測</h1>
-            <p class="text-sm text-slate-400 mt-1">予測1位が10回以内に来るかを検証・学習しつつ、次の確率を予測</p>
+            <h1 class="text-2xl font-bold tracking-tight text-indigo-400">🔢 10回以内出現パターン予測アナライザー</h1>
+            <p class="text-sm text-slate-400 mt-1">今後10回以内に来る確率を算出＆10回検証クールで自動学習</p>
         </header>
 
         <!-- クール状況・スタートパネル -->
         <section class="mb-5 bg-gradient-to-r from-slate-900 to-indigo-950/60 p-4 rounded-xl border border-indigo-500/30 flex flex-col sm:flex-row items-center justify-between gap-4">
             <div class="text-center sm:text-left">
-                <span class="text-xs text-indigo-300 font-semibold uppercase tracking-wider block">10回クール状況</span>
+                <span class="text-xs text-indigo-300 font-semibold uppercase tracking-wider block">10回クール検証状況</span>
                 <div class="flex items-baseline gap-2 mt-0.5">
-                    <span id="game-status-text" class="text-lg font-bold text-slate-200">未開始 (Qキーでスタート)</span>
+                    <span id="game-status-text" class="text-lg font-bold text-slate-200">待機中 (Qキーでスタート)</span>
                 </div>
                 <div class="text-xs text-slate-400 mt-1">
-                    的中: <strong id="stat-success" class="text-emerald-400">0</strong>回 / 
-                    ハズレ(学習): <strong id="stat-fail" class="text-rose-400">0</strong>回
+                    10回以内的中: <strong id="stat-success" class="text-emerald-400">0</strong>回 / 
+                    不的中(学習データ): <strong id="stat-fail" class="text-rose-400">0</strong>回
                 </div>
             </div>
             <div>
@@ -84,8 +84,8 @@
         <!-- 予測ランキングセクション -->
         <section class="mb-6">
             <div class="flex justify-between items-center mb-2.5">
-                <h2 class="text-sm font-semibold text-slate-200">🏆 15回以内 出現予測ランキング (1-6)</h2>
-                <span class="text-xs text-indigo-400 bg-indigo-950 px-2 py-0.5 rounded border border-indigo-800/50">学習フィードバック込</span>
+                <h2 class="text-sm font-semibold text-slate-200">🏆 10回以内 出現期待確率ランキング (1-6)</h2>
+                <span class="text-xs text-indigo-400 bg-indigo-950 px-2 py-0.5 rounded border border-indigo-800/50">10回スパン最適化</span>
             </div>
             <div id="prediction-list" class="space-y-2">
                 <!-- 動的に挿入 -->
@@ -104,19 +104,18 @@
         </section>
     </div>
 
-    <!-- JavaScript ロジック -->
+    <!-- JavaScript ロジック (10回以内予測重視) -->
     <script>
         let state = {
             history: [], 
             sessions: [{ id: 1, name: "区切り #1" }],
-            // 10回クール検証ゲームの状態
             game: {
                 active: false,
                 targetNum: null,      // スタート時点の予測1位
-                remainingCount: 0,    // 残りカウント (10からスタート)
-                successCount: 0,      // 的中回数
-                failCount: 0,         // ハズレ回数
-                failedPatterns: []    // ハズレから学んだパターン署名 [{lastNums: [...], target: X}, ...]
+                remainingCount: 0,    // 残りカウント (10からカウントダウン)
+                successCount: 0,      // 的中数
+                failCount: 0,         // 外れ数
+                failedPatterns: []    // 不的中時の直近パターンデータ
             }
         };
 
@@ -124,7 +123,7 @@
         const TARGET_NUMBERS = [1, 2, 3, 4, 5, 6];
 
         function loadData() {
-            const saved = localStorage.getItem('number_predictor_game_state_v1');
+            const saved = localStorage.getItem('number_predictor_game_10win_state');
             if (saved) {
                 try { state = JSON.parse(saved); } catch (e) { console.error(e); }
             }
@@ -134,7 +133,7 @@
         }
 
         function saveData() {
-            localStorage.setItem('number_predictor_game_state_v1', JSON.stringify(state));
+            localStorage.setItem('number_predictor_game_10win_state', JSON.stringify(state));
         }
 
         function getCurrentSessionId() {
@@ -144,12 +143,11 @@
             return state.sessions[state.sessions.length - 1].id;
         }
 
-        // --- ゲームコントロール ---
         function startGame() {
             const predictions = calculatePredictions();
             if (predictions.length === 0) return;
 
-            const topNum = predictions[0].num; // 現在の予測1位
+            const topNum = predictions[0].num;
             state.game.active = true;
             state.game.targetNum = topNum;
             state.game.remainingCount = 10;
@@ -157,7 +155,6 @@
             updateUI();
         }
 
-        // 数値追加＆ゲーム進行判定
         function addNumber(num) {
             const parsedNum = parseInt(num);
             if (isNaN(parsedNum) || !INPUT_NUMBERS.includes(parsedNum)) return;
@@ -165,30 +162,28 @@
             const sessionId = getCurrentSessionId();
             state.history.push({ num: parsedNum, sessionId: sessionId });
 
-            // もし10回クール検証ゲームが進行中なら処理
+            // 10回クール検証中の処理
             if (state.game.active) {
                 state.game.remainingCount--;
 
-                // 的中判定 (0以外の有効数字が対象、かつターゲット一致)
+                // 的中判定 (ターゲット数字が出た場合)
                 if (parsedNum === state.game.targetNum) {
                     state.game.successCount++;
-                    alert(`🎉 的中！ 予測1位 [${state.game.targetNum}] が10回以内に来ました！`);
+                    alert(`🎉 的中！ [${state.game.targetNum}] が10回以内に来ました！`);
                     state.game.active = false;
                     state.game.targetNum = null;
                 } 
-                // 10回回り切った場合 (ハズレ・負の学習)
+                // 10回消化しても出なかった場合 (不的中学習)
                 else if (state.game.remainingCount <= 0) {
                     state.game.failCount++;
-                    // 負の学習パターンとして保存（直近の数値を署名にする）
-                    const recentSlice = state.history.slice(-5, -1).map(h => h.num);
+                    const recentSlice = state.history.slice(-6, -1).map(h => h.num);
                     state.game.failedPatterns.push({
                         signature: recentSlice.join(','),
                         target: state.game.targetNum
                     });
-                    // 最大50件まで保持
                     if (state.game.failedPatterns.length > 50) state.game.failedPatterns.shift();
 
-                    alert(`❌ ハズレ... 予測1位 [${state.game.targetNum}] は10回以内に来ませんでした。（パターンを学習しました）`);
+                    alert(`❌ 不的中... 10回以内に [${state.game.targetNum}] は来ませんでした。（このパターンを学習しました）`);
                     state.game.active = false;
                     state.game.targetNum = null;
                 }
@@ -201,7 +196,6 @@
         function undo() {
             if (state.history.length > 0) {
                 state.history.pop();
-                // ※ゲーム中のカウント巻き戻しはシンプルにリセットするか継続するか。ここでは安全にゲーム非アクティブ化または簡易対応
                 saveData();
                 updateUI();
             }
@@ -210,7 +204,7 @@
         function startNewSession() {
             const newId = state.sessions.length + 1;
             state.sessions.push({ id: newId, name: `区切り #${newId}` });
-            state.game.active = false; // クールもリセット
+            state.game.active = false;
             saveData();
             updateUI();
         }
@@ -227,7 +221,7 @@
             }
         }
 
-        // --- 予測＆学習ロジック ---
+        // --- 10回以内出現確率ロジック ---
         function calculatePredictions() {
             const history = state.history;
             const currentSessionId = getCurrentSessionId();
@@ -244,21 +238,23 @@
             const currentNums = currentSessionHistory.map(item => item.num);
             const sessionTotal = currentNums.length;
 
-            // 1. 15回以内の勢い評価
+            // 1. 直近「10回ウィンドウ」内での勢い（ホットハンド評価）
             if (sessionTotal > 0) {
-                const window15 = currentNums.slice(-15);
-                window15.forEach((num, idx) => {
+                const window10 = currentNums.slice(-10);
+                window10.forEach((num, idx) => {
                     if (num !== 0) {
-                        const weight = (idx + 1) * 2.5;
+                        // 10回以内により直近に出ている数字へ強く重み付け
+                        const weight = (idx + 1) * 3.5;
                         scores[num] += weight;
                     }
                 });
             }
 
-            // 2. 過去全体の遷移パターン（マルコフ連鎖）
+            // 2. 過去全体の遷移パターン（10回以内の連鎖確率）
             if (total >= 2) {
                 const lastNum = history[history.length - 1].num;
                 if (lastNum === 0) {
+                    // 0（不確定要素）直後は全体の確信度を均等に少し下げる
                     TARGET_NUMBERS.forEach(n => scores[n] *= 0.85);
                 } else {
                     let transitionCounts = {};
@@ -278,46 +274,48 @@
                     if (transitionTotal > 0) {
                         TARGET_NUMBERS.forEach(n => {
                             const transProb = transitionCounts[n] / transitionTotal;
-                            scores[n] += transProb * 50;
+                            scores[n] += transProb * 55;
                         });
                     }
                 }
             }
 
-            // 3. ペア相関（1-2, 3-4, 5-6）
+            // 3. 10回スパンでの近しいペア相関 (1-2, 3-4, 5-6)
             if (sessionTotal > 0) {
                 const pairList = [[1, 2], [3, 4], [5, 6]];
-                const recent15 = currentNums.slice(-15);
+                const recent10 = currentNums.slice(-10);
 
                 pairList.forEach(([a, b]) => {
-                    const countA = recent15.filter(x => x === a).length;
-                    const countB = recent15.filter(x => x === b).length;
-                    const recent5 = currentNums.slice(-5);
-                    const recentA5 = recent5.filter(x => x === a).length;
-                    const recentB5 = recent5.filter(x => x === b).length;
+                    const countA = recent10.filter(x => x === a).length;
+                    const countB = recent10.filter(x => x === b).length;
+                    const recent4 = currentNums.slice(-4);
+                    const recentA4 = recent4.filter(x => x === a).length;
+                    const recentB4 = recent4.filter(x => x === b).length;
 
-                    if (countA >= 3 && countB === 0) scores[b] -= 12;
-                    else if (countB >= 3 && countA === 0) scores[a] -= 12;
+                    // 片方偏り（10回内で片方だけ出ている）
+                    if (countA >= 2 && countB === 0) scores[b] -= 15;
+                    else if (countB >= 2 && countA === 0) scores[a] -= 15;
 
-                    if (recentA5 >= 1 && recentB5 >= 1) {
-                        scores[a] += 20;
-                        scores[b] += 20;
+                    // 4回以内で連動して共鳴
+                    if (recentA4 >= 1 && recentB4 >= 1) {
+                        scores[a] += 25;
+                        scores[b] += 25;
                     }
 
+                    // 片方が動いた直後のもう片方への連動波及
                     const lastNum = currentNums[currentNums.length - 1];
-                    if (lastNum === a && recentB5 === 0) scores[b] += 15;
-                    else if (lastNum === b && recentA5 === 0) scores[a] += 15;
+                    if (lastNum === a && recentB4 === 0) scores[b] += 18;
+                    else if (lastNum === b && recentA4 === 0) scores[a] += 18;
                 });
             }
 
-            // 4. ハズレ（負の学習）からのペナルティ適用
+            // 4. 過去に10回以内に届かなかった「不的中パターン」の減点補正
             if (state.game.failedPatterns && state.game.failedPatterns.length > 0) {
-                const recentSignature = currentNums.slice(-4).join(',');
+                const recentSig = currentNums.slice(-4).join(',');
                 state.game.failedPatterns.forEach(fp => {
-                    // もし過去に同じような流れでこのターゲットがハズレていればスコアを大きく減点
-                    if (recentSignature.includes(fp.signature) && fp.signature.length > 0) {
+                    if (recentSig.length > 0 && recentSig.includes(fp.signature)) {
                         if (scores[fp.target] !== undefined) {
-                            scores[fp.target] -= 35; // 過去の失敗パターンからの学習ペナルティ
+                            scores[fp.target] -= 40; // 10回以内に来なかった類似パターンの評価を下げる
                         }
                     }
                 });
@@ -326,6 +324,7 @@
             return formatResults(scores);
         }
 
+        // 10回以内に来る推定確率（%）の計算
         function formatResults(scores) {
             let totalScore = 0;
             TARGET_NUMBERS.forEach(n => {
@@ -334,11 +333,14 @@
             });
 
             let results = TARGET_NUMBERS.map(n => {
-                let probability = (scores[n] / totalScore) * 100;
+                // 相対的確率から「10回試行内で少なくとも1回以上出現する推定確率」をモデル化
+                const baseProb = scores[n] / totalScore; // 1回あたりの期待確率
+                const prob10In10 = (1 - Math.pow(1 - baseProb, 6.5)) * 100; // 10回以内出現率換算
+
                 return {
                     num: n,
                     score: scores[n],
-                    rate: probability.toFixed(1) + "%"
+                    rate: prob10In10.toFixed(1) + "%"
                 };
             });
 
@@ -354,16 +356,15 @@
             const currentSession = state.sessions[state.sessions.length - 1];
             document.getElementById('current-session-label').textContent = currentSession ? currentSession.name : "区切り #1";
 
-            // ゲームステータス表示
             const statusText = document.getElementById('game-status-text');
             const startBtn = document.getElementById('btn-start-game');
             if (state.game.active) {
-                statusText.innerHTML = `検証中: 狙い目 <span class="text-amber-300 font-extrabold text-xl">[${state.game.targetNum}]</span> (あと <span class="text-indigo-300">${state.game.remainingCount}回</span>)`;
+                statusText.innerHTML = `検証中: 10回以内ターゲット <span class="text-amber-300 font-extrabold text-xl">[${state.game.targetNum}]</span> (あと <span class="text-indigo-300">${state.game.remainingCount}回</span>)`;
                 startBtn.textContent = "検証中...";
                 startBtn.disabled = true;
                 startBtn.className = "bg-slate-700 text-slate-400 font-bold px-6 py-3 rounded-xl cursor-not-allowed opacity-60";
             } else {
-                statusText.textContent = "待機中 (Qキーで開始)";
+                statusText.textContent = "待機中 (Qキーでスタート)";
                 startBtn.innerHTML = "<span>▶ スタート (Q)</span>";
                 startBtn.disabled = false;
                 startBtn.className = "bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-6 py-3 rounded-xl transition shadow-lg border border-emerald-500/50 flex items-center gap-2";
@@ -371,7 +372,7 @@
 
             document.getElementById('btn-undo').disabled = state.history.length === 0;
 
-            // 履歴描画
+            // 履歴
             const historyContainer = document.getElementById('history-container');
             if (state.history.length === 0) {
                 historyContainer.innerHTML = '<span class="text-xs text-slate-500 italic">まだ入力がありません</span>';
@@ -389,7 +390,7 @@
                 });
             }
 
-            // ランキング描画
+            // ランキング
             const predictions = calculatePredictions();
             const predictionList = document.getElementById('prediction-list');
             predictionList.innerHTML = '';
@@ -401,10 +402,9 @@
                 if (rank === 2) rankColor = "text-slate-200 bg-slate-800 border-slate-600 font-bold";
                 if (rank === 3) rankColor = "text-amber-600 bg-amber-950/20 border-amber-900/50 font-bold";
 
-                // もし現在ゲーム中で、この数字がターゲットならハイライトする
                 let targetBadge = "";
                 if (state.game.active && pred.num === state.game.targetNum) {
-                    targetBadge = `<span class="ml-2 text-[10px] bg-amber-500 text-slate-950 px-1.5 py-0.5 rounded font-extrabold animate-pulse">ターゲット中</span>`;
+                    targetBadge = `<span class="ml-2 text-[10px] bg-amber-500 text-slate-950 px-1.5 py-0.5 rounded font-extrabold animate-pulse">10回以内ターゲット</span>`;
                 }
 
                 const itemDiv = document.createElement('div');
@@ -433,7 +433,6 @@
             loadData();
             updateUI();
 
-            // ボタンクリック
             document.querySelectorAll('.num-btn').forEach(button => {
                 button.addEventListener('click', () => {
                     addNumber(button.getAttribute('data-num'));
@@ -445,24 +444,24 @@
             document.getElementById('btn-new-session').addEventListener('click', startNewSession);
             document.getElementById('btn-reset').addEventListener('click', resetAll);
 
-            // キーボードショートカット (PC専用)
+            // PC操作用ショートカット
             document.addEventListener('keydown', (e) => {
                 if (['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement.tagName)) return;
 
-                // Qキーでスタート
+                // Qキー: スタート
                 if (e.key === 'q' || e.key === 'Q') {
                     if (!state.game.active) startGame();
                     return;
                 }
 
-                // スペースキーで 0 入力
+                // スペースキー: 0
                 if (e.key === ' ') {
-                    e.preventDefault(); // スクロール防止
+                    e.preventDefault();
                     addNumber(0);
                     return;
                 }
 
-                // 1〜6の数字キー・テンキー
+                // 1〜6: 数字キー / テンキー
                 const validKeys = ['1', '2', '3', '4', '5', '6'];
                 if (validKeys.includes(e.key)) {
                     addNumber(e.key);
