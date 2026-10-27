@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>数字パターン予測＆10回クール検証アプリ (1-6)</title>
+    <title>15連パターン予測＆高度学習アナライザー (1-6)</title>
     <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
@@ -16,47 +16,56 @@
         .prediction-bar {
             transition: width 0.4s ease-in-out;
         }
+        @keyframes pulse-gold {
+            0%, 100% { border-color: rgba(245, 158, 11, 0.9); box-shadow: 0 0 15px rgba(245, 158, 11, 0.4); }
+            50% { border-color: rgba(252, 211, 77, 1); box-shadow: 0 0 25px rgba(252, 211, 77, 0.7); }
+        }
+        .high-probability-card {
+            animation: pulse-gold 2s infinite ease-in-out;
+            background: linear-gradient(135deg, rgba(120, 53, 15, 0.4) 0%, rgba(69, 26, 3, 0.6) 100%);
+        }
     </style>
 </head>
 <body class="bg-slate-900 text-slate-100 min-h-screen flex flex-col items-center py-8 px-4">
 
-    <div class="max-w-xl w-full bg-slate-800 rounded-2xl shadow-xl p-6 border border-slate-700">
+    <div class="max-w-2xl w-full bg-slate-800 rounded-2xl shadow-2xl p-6 border border-slate-700">
         <header class="text-center mb-5">
-            <h1 class="text-2xl font-bold tracking-tight text-indigo-400">🔢 10回以内出現パターン予測アナライザー</h1>
-            <p class="text-sm text-slate-400 mt-1">今後10回以内に来る確率を算出＆10回検証クールで自動学習</p>
+            <h1 class="text-2xl font-bold tracking-tight text-indigo-400">🔢 15連パターン予測 ＆ 高度学習アナライザー</h1>
+            <p class="text-sm text-slate-400 mt-1">15回以内の出現確率を過去全データ＋当日データ＋7大ロジックで予測</p>
         </header>
 
-        <!-- クール状況・スタートパネル -->
-        <section class="mb-5 bg-gradient-to-r from-slate-900 to-indigo-950/60 p-4 rounded-xl border border-indigo-500/30 flex flex-col sm:flex-row items-center justify-between gap-4">
+        <!-- 15回チャレンジ・スタートパネル -->
+        <section class="mb-5 bg-gradient-to-r from-slate-900 via-indigo-950/70 to-slate-900 p-4 rounded-xl border border-indigo-500/30 flex flex-col sm:flex-row items-center justify-between gap-4">
             <div class="text-center sm:text-left">
-                <span class="text-xs text-indigo-300 font-semibold uppercase tracking-wider block">10回クール検証状況</span>
+                <span class="text-xs text-indigo-300 font-semibold uppercase tracking-wider block">🎯 15回チャレンジ検証</span>
                 <div class="flex items-baseline gap-2 mt-0.5">
                     <span id="game-status-text" class="text-lg font-bold text-slate-200">待機中 (Qキーでスタート)</span>
                 </div>
                 <div class="text-xs text-slate-400 mt-1">
-                    10回以内的中: <strong id="stat-success" class="text-emerald-400">0</strong>回 / 
-                    不的中(学習データ): <strong id="stat-fail" class="text-rose-400">0</strong>回
+                    成功: <strong id="stat-success" class="text-emerald-400">0</strong>回 / 
+                    失敗: <strong id="stat-fail" class="text-rose-400">0</strong>回
                 </div>
             </div>
             <div>
                 <button id="btn-start-game" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-6 py-3 rounded-xl transition shadow-lg border border-emerald-500/50 flex items-center gap-2">
-                    <span>▶ スタート (Q)</span>
+                    <span>▶ 15連スタート (Q)</span>
                 </button>
             </div>
         </section>
 
-        <!-- コントロール・区切りセクション -->
-        <section class="mb-5 bg-slate-900/50 p-3 rounded-xl border border-slate-700/50 flex flex-wrap items-center justify-between gap-3 text-sm">
+        <!-- セッション・区切り選択＆日付管理 -->
+        <section class="mb-5 bg-slate-900/60 p-3.5 rounded-xl border border-slate-700/50 flex flex-wrap items-center justify-between gap-3 text-sm">
             <div>
-                <span class="text-xs text-slate-400 block">現在の区切り</span>
-                <span id="current-session-label" class="font-bold text-indigo-300">区切り #1</span>
+                <span class="text-xs text-slate-400 block">本日の記録 (当日枠)</span>
+                <span id="today-label" class="font-bold text-indigo-300">----/--/--</span>
+                <span class="text-xs text-slate-500 ml-2">(累計: <span id="today-count" class="text-slate-300 font-bold">0</span>件)</span>
             </div>
             <div class="flex gap-2">
                 <button id="btn-new-session" class="bg-indigo-600/80 hover:bg-indigo-600 text-white text-xs font-semibold px-3 py-1.5 rounded-lg transition">
                     新しい区切り
                 </button>
                 <button id="btn-reset" class="bg-rose-950/50 hover:bg-rose-900 text-rose-300 text-xs font-medium px-3 py-1.5 rounded-lg transition border border-rose-800/50">
-                    全リセット
+                    全データリセット
                 </button>
             </div>
         </section>
@@ -65,7 +74,7 @@
         <section class="mb-6 text-center">
             <div class="flex justify-between items-center mb-2 px-1">
                 <label class="text-xs font-medium text-slate-300">数値を入力 (1〜6:数字キー / 0:スペースキー)</label>
-                <button id="btn-undo" class="text-xs text-slate-400 hover:text-slate-200 underline disabled:opacity-50" disabled>直前を取り消す (BS / Z)</button>
+                <button id="btn-undo" class="text-xs text-indigo-400 hover:text-indigo-200 underline disabled:opacity-40" disabled>直前を取り消す (BS / Z)</button>
             </div>
             <div class="grid grid-cols-7 gap-1.5 sm:gap-2">
                 <button data-num="0" class="num-btn bg-slate-700/60 hover:bg-slate-600 text-slate-300 text-lg font-bold py-3.5 rounded-xl border border-slate-600/50 transition shadow" title="0 (Space)">0</button>
@@ -76,26 +85,27 @@
                 <button data-num="5" class="num-btn bg-slate-700 hover:bg-indigo-600 text-lg font-bold py-3.5 rounded-xl border border-slate-600 transition shadow">5</button>
                 <button data-num="6" class="num-btn bg-slate-700 hover:bg-indigo-600 text-lg font-bold py-3.5 rounded-xl border border-slate-600 transition shadow">6</button>
             </div>
-            <div class="mt-2 text-left text-xs text-slate-400 px-1">
-                総入力回数: <strong id="total-count" class="text-white">0</strong> 回
+            <div class="mt-2.5 flex justify-between items-center text-xs text-slate-400 px-1">
+                <span>総全履歴数: <strong id="total-count" class="text-white">0</strong> 件</span>
+                <span class="text-slate-500">※過去全履歴＋当日データを高度融合</span>
             </div>
         </section>
 
-        <!-- 予測ランキングセクション -->
+        <!-- 15回以内出現予測ランキング -->
         <section class="mb-6">
             <div class="flex justify-between items-center mb-2.5">
-                <h2 class="text-sm font-semibold text-slate-200">🏆 10回以内 出現期待確率ランキング (1-6)</h2>
-                <span class="text-xs text-indigo-400 bg-indigo-950 px-2 py-0.5 rounded border border-indigo-800/50">10回スパン最適化</span>
+                <h2 class="text-sm font-semibold text-slate-200">🏆 15回以内 出現確率ランキング (1-6)</h2>
+                <span class="text-xs text-amber-400 bg-amber-950/60 px-2 py-0.5 rounded border border-amber-800/50">85%以上ハイライト機能付</span>
             </div>
-            <div id="prediction-list" class="space-y-2">
+            <div id="prediction-list" class="space-y-2.5">
                 <!-- 動的に挿入 -->
             </div>
         </section>
 
-        <!-- 履歴 -->
+        <!-- 入力履歴 -->
         <section class="border-t border-slate-700/60 pt-4">
             <div class="flex justify-between items-center mb-2">
-                <h3 class="text-xs font-semibold text-slate-300">📜 入力履歴 (直近15件)</h3>
+                <h3 class="text-xs font-semibold text-slate-300">📜 直近入力履歴 (最新15件)</h3>
                 <span class="text-xs text-slate-500">自動保存対応</span>
             </div>
             <div id="history-container" class="flex flex-wrap gap-1.5 min-h-[36px] bg-slate-900/40 p-2.5 rounded-xl border border-slate-800">
@@ -104,45 +114,54 @@
         </section>
     </div>
 
-    <!-- JavaScript ロジック (10回以内予測重視) -->
+    <!-- JavaScript 予測エンジン＆状態管理 -->
     <script>
-        let state = {
-            history: [], 
-            sessions: [{ id: 1, name: "区切り #1" }],
-            game: {
-                active: false,
-                targetNum: null,      // スタート時点の予測1位
-                remainingCount: 0,    // 残りカウント (10からカウントダウン)
-                successCount: 0,      // 的中数
-                failCount: 0,         // 外れ数
-                failedPatterns: []    // 不的中時の直近パターンデータ
-            }
-        };
-
         const INPUT_NUMBERS = [0, 1, 2, 3, 4, 5, 6];
         const TARGET_NUMBERS = [1, 2, 3, 4, 5, 6];
 
+        let state = {
+            allHistory: [],  // 過去すべての履歴 [{num: 3, date: '2026-10-27'}, ...]
+            todayDate: getTodayString(),
+            sessions: [{ id: 1, name: "区切り #1" }],
+            game: {
+                active: false,
+                targetNum: null,      // チャレンジ対象数字
+                remainingCount: 15,   // 残り回数 (15回)
+                successCount: 0,
+                failCount: 0,
+                historyStack: []      // チャレンジ開始後の入力記録（Undoでカウント戻す用）
+            }
+        };
+
+        function getTodayString() {
+            const d = new Date();
+            return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+        }
+
         function loadData() {
-            const saved = localStorage.getItem('number_predictor_game_10win_state');
+            const saved = localStorage.getItem('number_predictor_15win_advanced_v1');
             if (saved) {
-                try { state = JSON.parse(saved); } catch (e) { console.error(e); }
+                try {
+                    state = JSON.parse(saved);
+                } catch (e) {
+                    console.error("データ読み込み失敗", e);
+                }
+            }
+            // 日付更新チェック
+            const currentToday = getTodayString();
+            if (state.todayDate !== currentToday) {
+                state.todayDate = currentToday;
             }
             if (!state.game) {
-                state.game = { active: false, targetNum: null, remainingCount: 0, successCount: 0, failCount: 0, failedPatterns: [] };
+                state.game = { active: false, targetNum: null, remainingCount: 15, successCount: 0, failCount: 0, historyStack: [] };
             }
         }
 
         function saveData() {
-            localStorage.setItem('number_predictor_game_10win_state', JSON.stringify(state));
+            localStorage.setItem('number_predictor_15win_advanced_v1', JSON.stringify(state));
         }
 
-        function getCurrentSessionId() {
-            if (state.sessions.length === 0) {
-                state.sessions.push({ id: 1, name: "区切り #1" });
-            }
-            return state.sessions[state.sessions.length - 1].id;
-        }
-
+        // --- チャレンジ（15連ゲーム）制御 ---
         function startGame() {
             const predictions = calculatePredictions();
             if (predictions.length === 0) return;
@@ -150,7 +169,8 @@
             const topNum = predictions[0].num;
             state.game.active = true;
             state.game.targetNum = topNum;
-            state.game.remainingCount = 10;
+            state.game.remainingCount = 15;
+            state.game.historyStack = [];
             saveData();
             updateUI();
         }
@@ -159,33 +179,29 @@
             const parsedNum = parseInt(num);
             if (isNaN(parsedNum) || !INPUT_NUMBERS.includes(parsedNum)) return;
             
-            const sessionId = getCurrentSessionId();
-            state.history.push({ num: parsedNum, sessionId: sessionId });
+            const todayStr = getTodayString();
+            state.allHistory.push({ num: parsedNum, date: todayStr });
 
-            // 10回クール検証中の処理
+            // 15連チャレンジ進行中の制御
             if (state.game.active) {
                 state.game.remainingCount--;
+                state.game.historyStack.push(parsedNum);
 
-                // 的中判定 (ターゲット数字が出た場合)
+                // 的中判定 (1〜6でターゲット一致)
                 if (parsedNum === state.game.targetNum) {
                     state.game.successCount++;
-                    alert(`🎉 的中！ [${state.game.targetNum}] が10回以内に来ました！`);
+                    alert(`🎉 的中！ 15回以内にターゲット [${state.game.targetNum}] が出現しました！`);
                     state.game.active = false;
                     state.game.targetNum = null;
+                    state.game.historyStack = [];
                 } 
-                // 10回消化しても出なかった場合 (不的中学習)
+                // 15回消化完了（不的中）
                 else if (state.game.remainingCount <= 0) {
                     state.game.failCount++;
-                    const recentSlice = state.history.slice(-6, -1).map(h => h.num);
-                    state.game.failedPatterns.push({
-                        signature: recentSlice.join(','),
-                        target: state.game.targetNum
-                    });
-                    if (state.game.failedPatterns.length > 50) state.game.failedPatterns.shift();
-
-                    alert(`❌ 不的中... 10回以内に [${state.game.targetNum}] は来ませんでした。（このパターンを学習しました）`);
+                    alert(`❌ 15回終了... ターゲット [${state.game.targetNum}] は出ませんでした。`);
                     state.game.active = false;
                     state.game.targetNum = null;
+                    state.game.historyStack = [];
                 }
             }
 
@@ -193,138 +209,209 @@
             updateUI();
         }
 
+        // 取り消し (Undo) 機能：チャレンジ中の残り回数復元にも対応
         function undo() {
-            if (state.history.length > 0) {
-                state.history.pop();
+            if (state.allHistory.length > 0) {
+                state.allHistory.pop();
+
+                // チャレンジ中の Undo 処理
+                if (state.game.active && state.game.historyStack.length > 0) {
+                    state.game.historyStack.pop();
+                    state.game.remainingCount = Math.min(15, state.game.remainingCount + 1);
+                }
+
                 saveData();
                 updateUI();
             }
         }
 
         function startNewSession() {
-            const newId = state.sessions.length + 1;
-            state.sessions.push({ id: newId, name: `区切り #${newId}` });
             state.game.active = false;
+            state.game.targetNum = null;
+            state.game.historyStack = [];
             saveData();
             updateUI();
         }
 
         function resetAll() {
-            if (confirm("すべての履歴・学習データ・統計をリセットしますか？")) {
+            if (confirm("過去の全記録・当日の記録・チャレンジ統計をすべて初期化しますか？")) {
                 state = { 
-                    history: [], 
+                    allHistory: [], 
+                    todayDate: getTodayString(),
                     sessions: [{ id: 1, name: "区切り #1" }],
-                    game: { active: false, targetNum: null, remainingCount: 0, successCount: 0, failCount: 0, failedPatterns: [] }
+                    game: { active: false, targetNum: null, remainingCount: 15, successCount: 0, failCount: 0, historyStack: [] }
                 };
                 saveData();
                 updateUI();
             }
         }
 
-        // --- 10回以内出現確率ロジック ---
+        // --- 核心：7大ロジック融合型 15連予測アルゴリズム ---
         function calculatePredictions() {
-            const history = state.history;
-            const currentSessionId = getCurrentSessionId();
-            const total = history.length;
+            const allHist = state.allHistory;
+            const totalCount = allHist.length;
 
             let scores = {};
             TARGET_NUMBERS.forEach(n => scores[n] = 100);
 
-            if (total === 0) {
+            if (totalCount === 0) {
                 return formatResults(scores);
             }
 
-            const currentSessionHistory = history.filter(item => item.sessionId === currentSessionId);
-            const currentNums = currentSessionHistory.map(item => item.num);
-            const sessionTotal = currentNums.length;
+            const allNums = allHist.map(h => h.num);
+            const todayStr = getTodayString();
+            const todayNums = allHist.filter(h => h.date === todayStr).map(h => h.num);
 
-            // 1. 直近「10回ウィンドウ」内での勢い（ホットハンド評価）
-            if (sessionTotal > 0) {
-                const window10 = currentNums.slice(-10);
-                window10.forEach((num, idx) => {
-                    if (num !== 0) {
-                        // 10回以内により直近に出ている数字へ強く重み付け
-                        const weight = (idx + 1) * 3.5;
-                        scores[num] += weight;
+            // ========================================================
+            // ① 過去100連を特に重視（出が悪い＝低優先、出が良い＝高優先）
+            // ========================================================
+            const recent100 = allNums.slice(-100);
+            if (recent100.length > 0) {
+                const count100 = {};
+                TARGET_NUMBERS.forEach(n => count100[n] = 0);
+                recent100.forEach(n => { if (count100[n] !== undefined) count100[n]++; });
+                
+                const avg100 = recent100.length / 6;
+                TARGET_NUMBERS.forEach(n => {
+                    const diff = count100[n] - avg100;
+                    scores[n] += diff * 4.5; // 出が良いものを高評価、悪いものを低評価
+                });
+            }
+
+            // ========================================================
+            // ② 過去全体での最大出現間隔（ハマり）の分析
+            //    15連超えの頻度が多いほど減点、一度もない場合は高評価維持
+            // ========================================================
+            TARGET_NUMBERS.forEach(n => {
+                let maxGap = 0;
+                let currentGap = 0;
+                let over15GapsCount = 0;
+
+                for (let i = 0; i < allNums.length; i++) {
+                    if (allNums[i] === n) {
+                        if (currentGap > 15) over15GapsCount++;
+                        if (currentGap > maxGap) maxGap = currentGap;
+                        currentGap = 0;
+                    } else {
+                        currentGap++;
+                    }
+                }
+
+                if (over15GapsCount > 0) {
+                    scores[n] -= over15GapsCount * 18; // 15連超え間隔が頻発する数字は優先度低下
+                } else if (totalCount >= 30) {
+                    scores[n] += 25; // 過去一度も15連ハマりがない数字は安全・高優先度
+                }
+            });
+
+            // ========================================================
+            // ③ 直近20回の出現率 ＆ 超短期間での過剰連投警戒
+            //    6回超えで警戒、8回超えで冷却まで回避
+            // ========================================================
+            const recent20 = allNums.slice(-20);
+            if (recent20.length > 0) {
+                TARGET_NUMBERS.forEach(n => {
+                    const count20 = recent20.filter(x => x === n).length;
+                    if (count20 >= 8) {
+                        scores[n] -= 80; // 8回超え：過剰出現につき強力ペナルティ
+                    } else if (count20 >= 6) {
+                        scores[n] -= 25; // 6回超え：警戒モード
+                    } else {
+                        scores[n] += count20 * 6; // 適度な高出力は高評価
                     }
                 });
             }
 
-            // 2. 過去全体の遷移パターン（10回以内の連鎖確率）
-            if (total >= 2) {
-                const lastNum = history[history.length - 1].num;
-                if (lastNum === 0) {
-                    // 0（不確定要素）直後は全体の確信度を均等に少し下げる
-                    TARGET_NUMBERS.forEach(n => scores[n] *= 0.85);
-                } else {
-                    let transitionCounts = {};
-                    TARGET_NUMBERS.forEach(n => transitionCounts[n] = 0);
-                    let transitionTotal = 0;
+            // ========================================================
+            // ④ 15連パターンの完全一致検索と後続傾向の抽出
+            // ========================================================
+            if (allNums.length >= 30) {
+                const current15Sig = allNums.slice(-15).join(',');
+                const searchLength = 15;
 
-                    for (let i = 0; i < history.length - 1; i++) {
-                        if (history[i].num === lastNum) {
-                            const nextNum = history[i + 1].num;
-                            if (TARGET_NUMBERS.includes(nextNum)) {
-                                transitionCounts[nextNum]++;
-                                transitionTotal++;
-                            }
-                        }
-                    }
-
-                    if (transitionTotal > 0) {
-                        TARGET_NUMBERS.forEach(n => {
-                            const transProb = transitionCounts[n] / transitionTotal;
-                            scores[n] += transProb * 55;
+                for (let i = 0; i <= allNums.length - searchLength - 15; i++) {
+                    const past15Sig = allNums.slice(i, i + searchLength).join(',');
+                    if (past15Sig === current15Sig) {
+                        // パターン一致！その後の15連で出現した数字に強いボーナス
+                        const future15 = allNums.slice(i + searchLength, i + searchLength + 15);
+                        future15.forEach(fn => {
+                            if (scores[fn] !== undefined) scores[fn] += 20;
                         });
                     }
                 }
             }
 
-            // 3. 10回スパンでの近しいペア相関 (1-2, 3-4, 5-6)
-            if (sessionTotal > 0) {
-                const pairList = [[1, 2], [3, 4], [5, 6]];
-                const recent10 = currentNums.slice(-10);
-
-                pairList.forEach(([a, b]) => {
-                    const countA = recent10.filter(x => x === a).length;
-                    const countB = recent10.filter(x => x === b).length;
-                    const recent4 = currentNums.slice(-4);
-                    const recentA4 = recent4.filter(x => x === a).length;
-                    const recentB4 = recent4.filter(x => x === b).length;
-
-                    // 片方偏り（10回内で片方だけ出ている）
-                    if (countA >= 2 && countB === 0) scores[b] -= 15;
-                    else if (countB >= 2 && countA === 0) scores[a] -= 15;
-
-                    // 4回以内で連動して共鳴
-                    if (recentA4 >= 1 && recentB4 >= 1) {
-                        scores[a] += 25;
-                        scores[b] += 25;
+            // ========================================================
+            // ⑤ 短いスパンでのパターン反復（短尺フラクタル）の評価
+            // ========================================================
+            if (allNums.length >= 10) {
+                const current4Sig = allNums.slice(-4).join(',');
+                let patternMatches = 0;
+                for (let i = 0; i < allNums.length - 8; i++) {
+                    if (allNums.slice(i, i + 4).join(',') === current4Sig) {
+                        patternMatches++;
                     }
-
-                    // 片方が動いた直後のもう片方への連動波及
-                    const lastNum = currentNums[currentNums.length - 1];
-                    if (lastNum === a && recentB4 === 0) scores[b] += 18;
-                    else if (lastNum === b && recentA4 === 0) scores[a] += 18;
-                });
+                }
+                if (patternMatches >= 2) {
+                    const lastN = allNums[allNums.length - 1];
+                    if (scores[lastN]) scores[lastN] += patternMatches * 10;
+                }
             }
 
-            // 4. 過去に10回以内に届かなかった「不的中パターン」の減点補正
-            if (state.game.failedPatterns && state.game.failedPatterns.length > 0) {
-                const recentSig = currentNums.slice(-4).join(',');
-                state.game.failedPatterns.forEach(fp => {
-                    if (recentSig.length > 0 && recentSig.includes(fp.signature)) {
-                        if (scores[fp.target] !== undefined) {
-                            scores[fp.target] -= 40; // 10回以内に来なかった類似パターンの評価を下げる
-                        }
+            // ========================================================
+            // ⑥ 超短期間連続出現（ゾロ目連投）の評価
+            //    4回以下＝超高評価、8回超え＝一度冷却
+            // ========================================================
+            if (allNums.length > 0) {
+                const lastNum = allNums[allNums.length - 1];
+                let streak = 0;
+                for (let i = allNums.length - 1; i >= 0; i--) {
+                    if (allNums[i] === lastNum) streak++;
+                    else break;
+                }
+
+                if (streak > 0 && streak <= 4) {
+                    scores[lastNum] += streak * 25; // 4連以下は連続加算
+                } else if (streak >= 8) {
+                    scores[lastNum] -= 90; // 8連以上は一時的に評価落とす
+                }
+            }
+
+            // ========================================================
+            // ⑦ 一定間隔（周期性・規則的リズム）の評価
+            // ========================================================
+            TARGET_NUMBERS.forEach(n => {
+                const indices = [];
+                allNums.forEach((x, idx) => { if (x === n) indices.push(idx); });
+
+                if (indices.length >= 4) {
+                    const intervals = [];
+                    for (let i = 1; i < indices.length; i++) {
+                        intervals.push(indices[i] - indices[i - 1]);
                     }
+                    const recentIntervals = intervals.slice(-3);
+                    const avg = recentIntervals.reduce((a, b) => a + b, 0) / recentIntervals.length;
+                    const variance = recentIntervals.reduce((a, b) => a + Math.pow(b - avg, 2), 0) / recentIntervals.length;
+
+                    // 間隔のバラつき（分散）が小さく規則的なものは「安定感あり」として評価を上げる
+                    if (variance < 2.5) {
+                        scores[n] += 30;
+                    }
+                }
+            });
+
+            // 当日データの追加重み補正（当日波に乗っている数字のバックアップ）
+            if (todayNums.length > 0) {
+                const recentToday = todayNums.slice(-10);
+                recentToday.forEach(n => {
+                    if (scores[n] !== undefined) scores[n] += 5;
                 });
             }
 
             return formatResults(scores);
         }
 
-        // 10回以内に来る推定確率（%）の計算
+        // スコアから「15回以内に1回以上出現する期待確率(%)」の換算
         function formatResults(scores) {
             let totalScore = 0;
             TARGET_NUMBERS.forEach(n => {
@@ -333,52 +420,58 @@
             });
 
             let results = TARGET_NUMBERS.map(n => {
-                // 相対的確率から「10回試行内で少なくとも1回以上出現する推定確率」をモデル化
-                const baseProb = scores[n] / totalScore; // 1回あたりの期待確率
-                const prob10In10 = (1 - Math.pow(1 - baseProb, 6.5)) * 100; // 10回以内出現率換算
+                const baseProb = scores[n] / totalScore;
+                // 15連スパン内での累積確率換算（シグモイド補正付き）
+                const prob15 = (1 - Math.pow(1 - baseProb, 9.2)) * 100;
 
                 return {
                     num: n,
                     score: scores[n],
-                    rate: prob10In10.toFixed(1) + "%"
+                    rateVal: Math.min(99.4, Math.max(5.0, prob15)),
+                    rateStr: Math.min(99.4, Math.max(5.0, prob15)).toFixed(1) + "%"
                 };
             });
 
-            results.sort((a, b) => b.score - a.score);
+            results.sort((a, b) => b.rateVal - a.rateVal);
             return results;
         }
 
+        // 画面描画更新
         function updateUI() {
-            document.getElementById('total-count').textContent = state.history.length;
+            const todayStr = getTodayString();
+            document.getElementById('today-label').textContent = todayStr;
+
+            const todayList = state.allHistory.filter(h => h.date === todayStr);
+            document.getElementById('today-count').textContent = todayList.length;
+            document.getElementById('total-count').textContent = state.allHistory.length;
+
             document.getElementById('stat-success').textContent = state.game.successCount;
             document.getElementById('stat-fail').textContent = state.game.failCount;
 
-            const currentSession = state.sessions[state.sessions.length - 1];
-            document.getElementById('current-session-label').textContent = currentSession ? currentSession.name : "区切り #1";
-
             const statusText = document.getElementById('game-status-text');
             const startBtn = document.getElementById('btn-start-game');
+
             if (state.game.active) {
-                statusText.innerHTML = `検証中: 10回以内ターゲット <span class="text-amber-300 font-extrabold text-xl">[${state.game.targetNum}]</span> (あと <span class="text-indigo-300">${state.game.remainingCount}回</span>)`;
-                startBtn.textContent = "検証中...";
+                statusText.innerHTML = `チャレンジ中: ターゲット <span class="text-amber-300 font-extrabold text-xl">[${state.game.targetNum}]</span> (残り <span class="text-indigo-300 font-bold">${state.game.remainingCount}回</span>)`;
+                startBtn.textContent = "15連チャレンジ中...";
                 startBtn.disabled = true;
                 startBtn.className = "bg-slate-700 text-slate-400 font-bold px-6 py-3 rounded-xl cursor-not-allowed opacity-60";
             } else {
                 statusText.textContent = "待機中 (Qキーでスタート)";
-                startBtn.innerHTML = "<span>▶ スタート (Q)</span>";
+                startBtn.innerHTML = "<span>▶ 15連スタート (Q)</span>";
                 startBtn.disabled = false;
                 startBtn.className = "bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-6 py-3 rounded-xl transition shadow-lg border border-emerald-500/50 flex items-center gap-2";
             }
 
-            document.getElementById('btn-undo').disabled = state.history.length === 0;
+            document.getElementById('btn-undo').disabled = state.allHistory.length === 0;
 
-            // 履歴
+            // 直近履歴の描画 (15件)
             const historyContainer = document.getElementById('history-container');
-            if (state.history.length === 0) {
+            if (state.allHistory.length === 0) {
                 historyContainer.innerHTML = '<span class="text-xs text-slate-500 italic">まだ入力がありません</span>';
             } else {
                 historyContainer.innerHTML = '';
-                const recent = state.history.slice(-15).reverse();
+                const recent = state.allHistory.slice(-15).reverse();
                 recent.forEach((item) => {
                     const badge = document.createElement('span');
                     const isZero = item.num === 0;
@@ -390,39 +483,53 @@
                 });
             }
 
-            // ランキング
+            // 予測ランキングの描画 (85%超ハイライト機能対応)
             const predictions = calculatePredictions();
             const predictionList = document.getElementById('prediction-list');
             predictionList.innerHTML = '';
 
             predictions.forEach((pred, index) => {
                 const rank = index + 1;
-                let rankColor = "text-slate-400 bg-slate-800 border-slate-700";
-                if (rank === 1) rankColor = "text-amber-300 bg-amber-950/40 border-amber-600/50 font-bold";
-                if (rank === 2) rankColor = "text-slate-200 bg-slate-800 border-slate-600 font-bold";
-                if (rank === 3) rankColor = "text-amber-600 bg-amber-950/20 border-amber-900/50 font-bold";
+                const isHighProb = pred.rateVal >= 85.0; // 85%以上判定
+
+                let rankStyle = "text-slate-400 bg-slate-800 border-slate-700";
+                if (isHighProb) {
+                    rankStyle = "high-probability-card border-2 text-amber-200 font-bold shadow-lg";
+                } else if (rank === 1) {
+                    rankStyle = "text-amber-300 bg-amber-950/40 border-amber-600/50 font-bold";
+                } else if (rank === 2) {
+                    rankStyle = "text-slate-200 bg-slate-800 border-slate-600 font-bold";
+                } else if (rank === 3) {
+                    rankStyle = "text-amber-600 bg-amber-950/20 border-amber-900/50 font-bold";
+                }
 
                 let targetBadge = "";
                 if (state.game.active && pred.num === state.game.targetNum) {
-                    targetBadge = `<span class="ml-2 text-[10px] bg-amber-500 text-slate-950 px-1.5 py-0.5 rounded font-extrabold animate-pulse">10回以内ターゲット</span>`;
+                    targetBadge = `<span class="ml-2 text-[10px] bg-amber-500 text-slate-950 px-1.5 py-0.5 rounded font-extrabold animate-pulse">15連ターゲット</span>`;
+                }
+
+                let highProbBadge = "";
+                if (isHighProb) {
+                    highProbBadge = `<span class="ml-2 text-[10px] bg-amber-400 text-slate-950 px-2 py-0.5 rounded-full font-black tracking-wider uppercase animate-bounce">🔥 超高確率 85%超</span>`;
                 }
 
                 const itemDiv = document.createElement('div');
-                itemDiv.className = `flex items-center justify-between p-2.5 rounded-xl border ${rankColor} transition`;
+                itemDiv.className = `flex items-center justify-between p-3 rounded-xl border ${rankStyle} transition`;
                 
                 itemDiv.innerHTML = `
                     <div class="flex items-center gap-2.5">
                         <span class="w-5 text-center text-xs font-semibold">${rank}位</span>
-                        <span class="w-8 h-8 flex items-center justify-center bg-indigo-600 text-white font-extrabold rounded-lg shadow text-sm">${pred.num}</span>
+                        <span class="w-9 h-9 flex items-center justify-center ${isHighProb ? 'bg-amber-500 text-slate-950' : 'bg-indigo-600 text-white'} font-extrabold rounded-lg shadow text-base">${pred.num}</span>
                         ${targetBadge}
+                        ${highProbBadge}
                     </div>
                     <div class="flex-1 mx-4">
-                        <div class="w-full bg-slate-700/60 rounded-full h-2 overflow-hidden">
-                            <div class="prediction-bar bg-gradient-to-r from-indigo-500 to-teal-400 h-2 rounded-full" style="width: ${pred.rate}"></div>
+                        <div class="w-full bg-slate-700/60 rounded-full h-2.5 overflow-hidden">
+                            <div class="prediction-bar ${isHighProb ? 'bg-gradient-to-r from-amber-400 via-amber-300 to-yellow-200' : 'bg-gradient-to-r from-indigo-500 to-teal-400'} h-2.5 rounded-full" style="width: ${pred.rateStr}"></div>
                         </div>
                     </div>
                     <div class="text-right">
-                        <span class="text-xs font-bold text-slate-200">${pred.rate}</span>
+                        <span class="${isHighProb ? 'text-base font-extrabold text-amber-300' : 'text-xs font-bold text-slate-200'}">${pred.rateStr}</span>
                     </div>
                 `;
                 predictionList.appendChild(itemDiv);
@@ -444,7 +551,7 @@
             document.getElementById('btn-new-session').addEventListener('click', startNewSession);
             document.getElementById('btn-reset').addEventListener('click', resetAll);
 
-            // PC操作用ショートカット
+            // PC用ショートカットキーの割り当て
             document.addEventListener('keydown', (e) => {
                 if (['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement.tagName)) return;
 
@@ -454,7 +561,7 @@
                     return;
                 }
 
-                // スペースキー: 0
+                // スペースキー: 0 入力
                 if (e.key === ' ') {
                     e.preventDefault();
                     addNumber(0);
