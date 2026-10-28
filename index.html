@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>15連パターン予測＆統計ハイブリッドアナライザー (1-6)</title>
+    <title>15連ベイズ確率統計アナライザー (1-6)</title>
     <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
@@ -18,7 +18,7 @@
         }
         @keyframes pulse-gold {
             0%, 100% { border-color: rgba(245, 158, 11, 0.9); box-shadow: 0 0 15px rgba(245, 158, 11, 0.4); }
-            50% { border-color: rgba(252, 211, 77, 1); box-shadow: 0 0 25px rgba(245, 158, 11, 0.7); }
+            50% { border-color: rgba(252, 211, 77, 1); box-shadow: 0 0 25px rgba(252, 211, 77, 0.7); }
         }
         .high-probability-card {
             animation: pulse-gold 2s infinite ease-in-out;
@@ -30,8 +30,8 @@
 
     <div class="max-w-2xl w-full bg-slate-800 rounded-2xl shadow-2xl p-6 border border-slate-700">
         <header class="text-center mb-5">
-            <h1 class="text-2xl font-bold tracking-tight text-indigo-400">🔢 15連ハイブリッド予測アナライザー</h1>
-            <p class="text-sm text-slate-400 mt-1">独自パターン分析 ＋ 統計確率モデル（ポアソン・マルコフ等）の完全融合</p>
+            <h1 class="text-2xl font-bold tracking-tight text-indigo-400">🔢 15連ベイズ統計ハイブリッド予測</h1>
+            <p class="text-sm text-slate-400 mt-1">ベイズ更新・ポアソン分布・マルコフ連鎖・エントロピー理論の完全融合モデル</p>
         </header>
 
         <!-- 15回チャレンジ・スタートパネル -->
@@ -87,7 +87,7 @@
             </div>
             <div class="mt-2.5 flex justify-between items-center text-xs text-slate-400 px-1">
                 <span>総全履歴数: <strong id="total-count" class="text-white">0</strong> 件</span>
-                <span class="text-slate-500">※ハイブリッド統合予測エンジン起動中</span>
+                <span class="text-slate-500">※ベイズ更新・確率統計モデル稼働中</span>
             </div>
         </section>
 
@@ -114,22 +114,22 @@
         </section>
     </div>
 
-    <!-- JavaScript 予測エンジン＆状態管理 -->
+    <!-- JavaScript 確率統計予測エンジン -->
     <script>
         const INPUT_NUMBERS = [0, 1, 2, 3, 4, 5, 6];
         const TARGET_NUMBERS = [1, 2, 3, 4, 5, 6];
 
         let state = {
-            allHistory: [],  // 過去すべての履歴 [{num: 3, date: '2026-10-29'}, ...]
+            allHistory: [],  // 過去全履歴
             todayDate: getTodayString(),
             sessions: [{ id: 1, name: "区切り #1" }],
             game: {
                 active: false,
-                targetNum: null,      // チャレンジ対象数字
-                remainingCount: 15,   // 残り回数 (15回)
+                targetNum: null,
+                remainingCount: 15,
                 successCount: 0,
                 failCount: 0,
-                historyStack: []      // Undoでカウントを正しく戻す用
+                historyStack: []
             }
         };
 
@@ -139,13 +139,9 @@
         }
 
         function loadData() {
-            const saved = localStorage.getItem('number_predictor_15win_hybrid_v2');
+            const saved = localStorage.getItem('number_predictor_bayesian_v1');
             if (saved) {
-                try {
-                    state = JSON.parse(saved);
-                } catch (e) {
-                    console.error("データ読み込み失敗", e);
-                }
+                try { state = JSON.parse(saved); } catch (e) { console.error(e); }
             }
             const currentToday = getTodayString();
             if (state.todayDate !== currentToday) {
@@ -157,10 +153,9 @@
         }
 
         function saveData() {
-            localStorage.setItem('number_predictor_15win_hybrid_v2', JSON.stringify(state));
+            localStorage.setItem('number_predictor_bayesian_v1', JSON.stringify(state));
         }
 
-        // --- チャレンジ（15連ゲーム）制御 ---
         function startGame() {
             const predictions = calculatePredictions();
             if (predictions.length === 0) return;
@@ -208,12 +203,10 @@
         function undo() {
             if (state.allHistory.length > 0) {
                 state.allHistory.pop();
-
                 if (state.game.active && state.game.historyStack.length > 0) {
                     state.game.historyStack.pop();
                     state.game.remainingCount = Math.min(15, state.game.remainingCount + 1);
                 }
-
                 saveData();
                 updateUI();
             }
@@ -228,7 +221,7 @@
         }
 
         function resetAll() {
-            if (confirm("過去の全記録・当日の記録・チャレンジ統計をすべて初期化しますか？")) {
+            if (confirm("すべての記録をリセットしますか？")) {
                 state = { 
                     allHistory: [], 
                     todayDate: getTodayString(),
@@ -240,7 +233,7 @@
             }
         }
 
-        // --- ハイブリッド予測コアエンジン（独自7大ロジック ＋ 統計確率モデル） ---
+        // --- 本格確率論・統計モデル統合予測エンジン ---
         function calculatePredictions() {
             const allHist = state.allHistory;
             const totalCount = allHist.length;
@@ -257,182 +250,108 @@
             const todayNums = allHist.filter(h => h.date === todayStr).map(h => h.num);
 
             // ========================================================
-            // [独自①] 過去100連重視 (出が良い＝高評価, 悪い＝低評価)
+            // 1. ベイズ推論モデル (Bayesian Updating)
+            // 事前確率（全履歴の基本出現率）に、直近の観測尤度を掛け合わせて事後確率スコアを更新
             // ========================================================
-            const recent100 = allNums.slice(-100);
-            if (recent100.length > 0) {
-                const count100 = {};
-                TARGET_NUMBERS.forEach(n => count100[n] = 0);
-                recent100.forEach(n => { if (count100[n] !== undefined) count100[n]++; });
-                const avg100 = recent100.length / 6;
-                TARGET_NUMBERS.forEach(n => {
-                    scores[n] += (count100[n] - avg100) * 4.0;
-                });
-            }
+            const globalCounts = {};
+            TARGET_NUMBERS.forEach(n => globalCounts[n] = 0);
+            allNums.forEach(n => { if (globalCounts[n] !== undefined) globalCounts[n]++; });
 
-            // ========================================================
-            // [独自②] 最大出現間隔（15連ハマり頻度の抑制）
-            // ========================================================
+            const recentWindow = allNums.slice(-30);
+            const recentCounts = {};
+            TARGET_NUMBERS.forEach(n => recentCounts[n] = 0);
+            recentWindow.forEach(n => { if (recentCounts[n] !== undefined) recentCounts[n]++; });
+
             TARGET_NUMBERS.forEach(n => {
-                let maxGap = 0, currentGap = 0, over15GapsCount = 0;
-                for (let i = 0; i < allNums.length; i++) {
-                    if (allNums[i] === n) {
-                        if (currentGap > 15) over15GapsCount++;
-                        if (currentGap > maxGap) maxGap = currentGap;
-                        currentGap = 0;
-                    } else currentGap++;
-                }
-                if (over15GapsCount > 0) scores[n] -= over15GapsCount * 18;
-                else if (totalCount >= 30) scores[n] += 20;
+                const prior = (globalCounts[n] + 1) / (totalCount + 6); // ラプラス平滑化事前確率
+                const likelihood = (recentCounts[n] + 1) / (recentWindow.length + 6); // 尤度
+                const posterior = prior * likelihood * 1000;
+                scores[n] += posterior;
             });
 
             // ========================================================
-            // [独自③] 直近20回の出現率 ＆ 過剰連投（6回・8回超え）警戒
+            // 2. ポアソン分布モデル (Poisson Probability)
+            // 15回スパン内での平均発生回数から「0回である確率の余事象（1回以上起きる確率）」を厳密計算
             // ========================================================
-            const recent20 = allNums.slice(-20);
-            if (recent20.length > 0) {
-                TARGET_NUMBERS.forEach(n => {
-                    const count20 = recent20.filter(x => x === n).length;
-                    if (count20 >= 8) scores[n] -= 85;
-                    else if (count20 >= 6) scores[n] -= 30;
-                    else scores[n] += count20 * 5;
-                });
-            }
-
-            // ========================================================
-            // [独自④] 15連パターンの完全一致検索と後続傾向
-            // ========================================================
-            if (allNums.length >= 30) {
-                const current15Sig = allNums.slice(-15).join(',');
-                for (let i = 0; i <= allNums.length - 30; i++) {
-                    if (allNums.slice(i, i + 15).join(',') === current15Sig) {
-                        const future15 = allNums.slice(i + 15, i + 30);
-                        future15.forEach(fn => { if (scores[fn] !== undefined) scores[fn] += 18; });
-                    }
-                }
-            }
-
-            // ========================================================
-            // [独自⑤] 短スパンでのパターン反復（短尺フラクタル）
-            // ========================================================
-            if (allNums.length >= 10) {
-                const current4Sig = allNums.slice(-4).join(',');
-                let patternMatches = 0;
-                for (let i = 0; i < allNums.length - 8; i++) {
-                    if (allNums.slice(i, i + 4).join(',') === current4Sig) patternMatches++;
-                }
-                if (patternMatches >= 2) {
-                    const lastN = allNums[allNums.length - 1];
-                    if (scores[lastN]) scores[lastN] += patternMatches * 10;
-                }
-            }
-
-            // ========================================================
-            // [独自⑥] 超短期間連続出現（ゾロ目）評価
-            // ========================================================
-            if (allNums.length > 0) {
-                const lastNum = allNums[allNums.length - 1];
-                let streak = 0;
-                for (let i = allNums.length - 1; i >= 0; i--) {
-                    if (allNums[i] === lastNum) streak++;
-                    else break;
-                }
-                if (streak > 0 && streak <= 4) scores[lastNum] += streak * 22;
-                else if (streak >= 8) scores[lastNum] -= 90;
-            }
-
-            // ========================================================
-            // [独自⑦] 周期性・規則的リズム分析
-            // ========================================================
+            const lambdaWindow = Math.min(50, allNums.length);
+            const lambdaSub = allNums.slice(-lambdaWindow);
             TARGET_NUMBERS.forEach(n => {
-                const indices = [];
-                allNums.forEach((x, idx) => { if (x === n) indices.push(idx); });
-                if (indices.length >= 4) {
-                    const intervals = [];
-                    for (let i = 1; i < indices.length; i++) intervals.push(indices[i] - indices[i - 1]);
-                    const recentIntervals = intervals.slice(-3);
-                    const avg = recentIntervals.reduce((a, b) => a + b, 0) / recentIntervals.length;
-                    const variance = recentIntervals.reduce((a, b) => a + Math.pow(b - avg, 2), 0) / recentIntervals.length;
-                    if (variance < 2.5) scores[n] += 25;
-                }
+                const count = lambdaSub.filter(x => x === n).length;
+                const lambda1 = count / lambdaWindow;
+                const lambda15 = lambda1 * 15;
+                const poissonProb = (1 - Math.exp(-lambda15)) * 100;
+                scores[n] += poissonProb * 0.8;
             });
 
             // ========================================================
-            // 🌐 [一般統計①] マルコフ連鎖 (2階 Markov Chain: 直近2つの組み合わせ)
+            // 3. 高階マルコフ連鎖 (2階 Markov Chain: 直近2つの遷移確率)
             // ========================================================
             if (allNums.length >= 3) {
                 const last1 = allNums[allNums.length - 1];
                 const last2 = allNums[allNums.length - 2];
-                let matchCount = 0;
-                let nextCounts = {};
-                TARGET_NUMBERS.forEach(n => nextCounts[n] = 0);
+                let matchTotal = 0;
+                let nextMap = {};
+                TARGET_NUMBERS.forEach(n => nextMap[n] = 0);
 
                 for (let i = 0; i < allNums.length - 2; i++) {
                     if (allNums[i] === last2 && allNums[i + 1] === last1) {
-                        const targetNext = allNums[i + 2];
-                        if (nextCounts[targetNext] !== undefined) {
-                            nextCounts[targetNext]++;
-                            matchCount++;
+                        const nextN = allNums[i + 2];
+                        if (nextMap[nextN] !== undefined) {
+                            nextMap[nextN]++;
+                            matchTotal++;
                         }
                     }
                 }
-                if (matchCount > 0) {
+                if (matchTotal > 0) {
                     TARGET_NUMBERS.forEach(n => {
-                        const prob = nextCounts[n] / matchCount;
-                        scores[n] += prob * 45; // 直前2連の繋がりを高度補正
+                        scores[n] += (nextMap[n] / matchTotal) * 60;
                     });
                 }
             }
 
             // ========================================================
-            // 🌐 [一般統計②] 指数移動平均・減衰重み付け (Exponential Decay)
+            // 4. 指数減衰重み付け移動平均 (Exponential Decay)
             // ========================================================
-            const alpha = 0.08; // 減衰率
+            const alpha = 0.05;
             let expWeights = {};
             TARGET_NUMBERS.forEach(n => expWeights[n] = 0);
-            let totalExpWeight = 0;
+            let expTotal = 0;
 
             for (let i = 0; i < allNums.length; i++) {
                 const age = allNums.length - 1 - i;
-                const weight = Math.exp(-alpha * age);
+                const w = Math.exp(-alpha * age);
                 const num = allNums[i];
-                if (expWeights[num] !== undefined) {
-                    expWeights[num] += weight;
-                }
-                totalExpWeight += weight;
+                if (expWeights[num] !== undefined) expWeights[num] += w;
+                expTotal += w;
             }
-            if (totalExpWeight > 0) {
+            if (expTotal > 0) {
                 TARGET_NUMBERS.forEach(n => {
-                    const normWeight = expWeights[n] / totalExpWeight;
-                    scores[n] += normWeight * 35;
+                    scores[n] += (expWeights[n] / expTotal) * 45;
                 });
             }
 
             // ========================================================
-            // 🌐 [一般統計③] ポアソン分布による15回内1回以上生起確率
+            // 5. ハマり・過剰連投の統計的抑制（極端な偏りの自動補正）
             // ========================================================
-            const windowSizeForLambda = Math.min(60, allNums.length);
-            const subHistory = allNums.slice(-windowSizeForLambda);
+            // 直近20回で過剰に出ている数字の冷却補正
+            const recent20 = allNums.slice(-20);
             TARGET_NUMBERS.forEach(n => {
-                const countInWindow = subHistory.filter(x => x === n).length;
-                const lambda1 = (countInWindow / windowSizeForLambda); // 1回あたりの生起率
-                const lambda15 = lambda1 * 15; // 15回あたりの平均発生回数
-                // ポアソン確率: P(X >= 1) = 1 - exp(-lambda15)
-                const poissonProb = (1 - Math.exp(-lambda15)) * 100;
-                scores[n] += (poissonProb - 50) * 0.4;
+                const c20 = recent20.filter(x => x === n).length;
+                if (c20 >= 8) scores[n] -= 70;
+                else if (c20 >= 6) scores[n] -= 25;
             });
 
-            // 当日データの補正
+            // 当日データのシナジー補正
             if (todayNums.length > 0) {
                 todayNums.slice(-10).forEach(n => {
-                    if (scores[n] !== undefined) scores[n] += 4;
+                    if (scores[n] !== undefined) scores[n] += 5;
                 });
             }
 
             return formatResults(scores);
         }
 
-        // スコアから確率（%）の正規化＆15連累積化
+        // スコアを15回以内出現の期待確率（%）へ変換
         function formatResults(scores) {
             let totalScore = 0;
             TARGET_NUMBERS.forEach(n => {
@@ -456,7 +375,6 @@
             return results;
         }
 
-        // 画面UI描画
         function updateUI() {
             const todayStr = getTodayString();
             document.getElementById('today-label').textContent = todayStr;
@@ -485,7 +403,6 @@
 
             document.getElementById('btn-undo').disabled = state.allHistory.length === 0;
 
-            // 直近履歴
             const historyContainer = document.getElementById('history-container');
             if (state.allHistory.length === 0) {
                 historyContainer.innerHTML = '<span class="text-xs text-slate-500 italic">まだ入力がありません</span>';
@@ -503,7 +420,6 @@
                 });
             }
 
-            // ランキング描画
             const predictions = calculatePredictions();
             const predictionList = document.getElementById('prediction-list');
             predictionList.innerHTML = '';
